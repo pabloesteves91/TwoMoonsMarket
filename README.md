@@ -63,9 +63,10 @@ Die Seite bringt ein Web-App-Manifest und Icons mit. Über *Teilen → Zum
 Home-Bildschirm* (iOS) bzw. *Menü → App installieren* (Android) startet sie ohne
 Browser-Leiste im Vollbild.
 
-**Wichtig:** Die Daten liegen in der IndexedDB des jeweiligen Geräts. Handy und
-Büro-Rechner haben also getrennte Bestände, bis auf Firebase umgestellt wird.
-Zum Übertragen dient *Einstellungen → Backup exportieren* / *einlesen*.
+**Zu den Daten:** Im lokalen Modus hat jedes Gerät seinen eigenen Bestand – Handy
+und Büro-Rechner sind getrennt, Übertrag über *Einstellungen → Backup
+exportieren/einlesen*. Mit eingerichtetem Firebase (siehe unten) teilen sich alle
+angemeldeten Geräte denselben Bestand.
 
 ## Funktionen
 
@@ -152,33 +153,61 @@ Unter **Bestand → CSV exportieren** (exportiert immer die aktuell gefilterte A
 * **Shop-Import** – kompakte Spalten für den Shop-Upload
 * **Cardmarket-Stil** – `idProduct`, Menge, Preis, Zustand, Sprache, Foil
 
-## Datenhaltung & Login
+## Datenhaltung: lokal oder Cloud
 
-Alle Daten liegen aktuell in der **IndexedDB des jeweiligen Browsers** – kein Server,
-kein Login, nichts verlässt das Gerät. Entsprechend gilt: regelmässig
-*Einstellungen → Backup exportieren*.
+Die App hat zwei Betriebsarten, sie schaltet automatisch um:
 
-Der gesamte Datenzugriff läuft über das Interface `Repository`
-(`src/db/repository.ts`). Für den späteren Mehrbenutzer-Betrieb mit Firebase muss
-nur ein zweites Repository implementiert und in `src/db/index.ts` eingehängt werden –
-die Oberfläche bleibt unverändert. Die konkreten Schritte inkl. empfohlener
-Firestore-Struktur stehen in [`src/firebase/README.md`](src/firebase/README.md).
+| | **Lokal** (ohne `.env.local`) | **Cloud** (mit Firebase-Konfiguration) |
+| --- | --- | --- |
+| Login | keiner | E-Mail/Passwort |
+| Bestand, Regeln, Fotos | IndexedDB, pro Gerät | Firestore, für alle gleich |
+| Preislisten | IndexedDB | IndexedDB (bleibt pro Gerät) |
+| Einsatz | Testen, Einzelplatz | Team, Handy + PC gemeinsam |
+
+Im Cloud-Modus sehen alle angemeldeten Geräte denselben Bestand. Die importierten
+Preislisten bleiben bewusst lokal – pro Spiel sind das schnell über 50 000
+Datensätze, die für alle identisch und jederzeit neu importierbar sind. Praktische
+Folge: **der Preisimport läuft einmal pro Gerät**, der Bestand ist sofort überall.
+
+Einrichtung (Firestore anlegen, Konten erstellen, Security Rules veröffentlichen,
+Mitglieder freischalten): [`src/firebase/README.md`](src/firebase/README.md).
+Kurzfassung:
+
+```bash
+cp .env.example .env.local   # Werte aus der Firebase-Konsole eintragen
+npm run deploy:rules         # Security Rules veröffentlichen
+npm run deploy               # App veröffentlichen
+```
+
+Zugriff hat nur, wer in Firestore unter `workspaces/<id>/members/<uid>`
+eingetragen ist – ein blosses Konto genügt nicht. Wer sich ohne Freischaltung
+anmeldet, sieht seine Benutzer-ID zum Weitergeben an die Administration.
+
+Im lokalen Modus gilt weiterhin: die Daten liegen nur in diesem einen Browser,
+also regelmässig *Einstellungen → Backup exportieren*. Der Umzug in die Cloud
+läuft über *Backup exportieren* → anmelden → *Backup einlesen*.
+
+Technisch liegt der gesamte Datenzugriff hinter dem Interface `Repository`
+(`src/db/repository.ts`); `localRepository` und `firebaseRepository` erfüllen es
+gleichermassen, die Oberfläche kennt den Unterschied nicht.
 
 ## Projektstruktur
 
 ```
-firebase.json               Hosting-Konfiguration (statisches dist/)
+firebase.json               Hosting- und Firestore-Konfiguration
+firestore.rules             Security Rules (Zugriff nur für freigeschaltete Mitglieder)
 public/                     App-Icons und Web-App-Manifest
 scripts/import-prices.mjs   Download der Cardmarket-Preislisten
 src/lib/pricing.ts          Preisregeln, Matching, Rundung
 src/lib/cardmarket.ts       Import-Parser (JSON/CSV, Spaltenerkennung)
 src/lib/exporters.ts        CSV-Export-Formate
 src/db/                     Repository-Interface + IndexedDB-Implementierung
+src/firebase/               Firestore-Repository, Login-Gate, Konfiguration
 src/pages/                  Dashboard, Bestand, Preise, Regeln, Einstellungen
 src/components/             Modal, Bestandsformular, Regel-Editor, Foto-Upload
 ```
 
 ## Technik
 
-React 18 · TypeScript · Vite 6 · Dexie (IndexedDB) · React Router.
+React 18 · TypeScript · Vite 6 · Dexie (IndexedDB) · React Router · Firebase (optional).
 Keine UI-Bibliothek, das Styling liegt vollständig in `src/index.css`.

@@ -1,65 +1,122 @@
-# Firebase später einhängen
+# Firebase-Betrieb (Firestore + Login)
 
-Die App läuft ohne Login auf IndexedDB. Der gesamte Datenzugriff geht über
-`src/db/repository.ts` (Interface `Repository`) – ein Firestore-Backend muss nur
-dieselben Methoden erfüllen, die UI bleibt unverändert.
+Die App hat zwei Betriebsarten. Ohne `.env.local` läuft sie lokal ohne Login,
+alle Daten bleiben in der IndexedDB des jeweiligen Browsers. Sind die
+Firebase-Variablen gesetzt, schaltet sie automatisch auf Firestore um und
+verlangt eine Anmeldung.
 
-## Schritte
+Die Umschaltung passiert in `src/main.tsx`: nur im Firebase-Modus werden
+`firebaseRepository` und `AuthGate` nachgeladen, sonst bleibt das Firebase-SDK
+komplett aus dem Start-Bundle.
 
-1. **Projekt anlegen** auf console.firebase.google.com, Firestore und Authentication
-   (E-Mail/Passwort oder Google) aktivieren.
-2. **SDK installieren**
+## Was in der Cloud liegt – und was nicht
 
-   ```bash
-   npm install firebase
-   ```
+| Daten | Ort | Warum |
+| --- | --- | --- |
+| Bestand, Preisregeln, Spiele, Fotos, Einstellungen | Firestore | müssen auf allen Geräten gleich sein |
+| Importierte Cardmarket-Preislisten | IndexedDB, pro Gerät | pro Spiel schnell über 50 000 Datensätze; identisch für alle und jederzeit neu importierbar |
 
-3. **Konfiguration** als `.env.local` im Projektordner ablegen:
+Praktische Folge: **der Preisimport muss auf jedem Gerät einmal laufen.** Der
+Bestand dagegen ist sofort überall sichtbar.
 
-   ```
-   VITE_BACKEND=firebase
-   VITE_FIREBASE_API_KEY=...
-   VITE_FIREBASE_AUTH_DOMAIN=...
-   VITE_FIREBASE_PROJECT_ID=...
-   VITE_FIREBASE_STORAGE_BUCKET=...
-   VITE_FIREBASE_MESSAGING_SENDER_ID=...
-   VITE_FIREBASE_APP_ID=...
-   ```
+## Einrichtung
 
-4. **`src/firebase/firebaseRepository.ts` anlegen** – ein Objekt vom Typ `Repository`
-   mit `kind: 'firebase'`. Empfohlene Collection-Struktur:
+### 1. Firestore anlegen
 
-   ```
-   tenants/{tenantId}/games/{gameId}
-   tenants/{tenantId}/items/{itemId}
-   tenants/{tenantId}/overrides/{overrideId}
-   tenants/{tenantId}/settings/settings
-   prices/{gameId}/entries/{entryId}      // gemeinsam für alle Nutzer
-   ```
+Firebase-Konsole → *Firestore Database* → *Datenbank erstellen* → Produktionsmodus,
+Standort `eur3` (Europa).
 
-   Fotos gehören in Firebase Storage; im `InventoryItem` wird dann statt der
-   Data-URL der Storage-Pfad abgelegt.
+### 2. Anmeldung aktivieren
 
-5. **Umschalten** in `src/db/index.ts`:
+*Authentication* → *Sign-in method* → **E-Mail/Passwort** aktivieren.
+Danach unter *Users* für jede Mitarbeiterin und jeden Mitarbeiter ein Konto
+anlegen. Die App selbst hat bewusst keine Registrierung – Konten entstehen nur
+in der Konsole.
 
-   ```ts
-   import { localRepository } from './localRepository';
+### 3. Security Rules veröffentlichen
 
-   export const repo: Repository =
-     import.meta.env.VITE_BACKEND === 'firebase'
-       ? (await import('../firebase/firebaseRepository')).firebaseRepository
-       : localRepository;
-   ```
+```bash
+npm run deploy:rules
+```
 
-6. **Login-UI**: `onAuthStateChanged` in `src/store.tsx` auswerten und die App erst
-   nach erfolgreicher Anmeldung rendern.
+Die Regeln stehen in `firestore.rules`. Kern: Zugriff hat nur, wer unter
+`workspaces/<workspace>/members/<uid>` eingetragen ist. Das ist wichtig, weil
+sich mit aktivierter E-Mail-Anmeldung technisch jede Person ein Konto anlegen
+könnte – ohne Mitglieds-Eintrag sieht ein solches Konto aber nichts ausser dem
+Hinweis „Noch nicht freigeschaltet".
 
-## Hinweise
+### 4. Erste Person freischalten
 
-- Preislisten haben pro Spiel schnell > 50 000 Dokumente. Für Firestore lohnt sich
-  ein Batch-Import (500 Dokumente pro Batch) über ein Node-Skript oder eine
-  Cloud Function statt über den Browser.
-- Alternativ bleiben die Preise lokal (IndexedDB) und nur Bestand/Einstellungen
-  wandern in Firestore – das spart Kosten und Schreibvorgänge.
-- Die bestehenden Daten lassen sich über *Einstellungen → Backup exportieren*
-  sichern und nach der Umstellung wieder einlesen.
+In der Konsole → *Authentication → Users* die UID kopieren, dann in *Firestore*
+anlegen:
+
+```
+Sammlung:   workspaces
+Dokument:   twomoons                     (entspricht VITE_WORKSPACE_ID)
+Sammlung:   members
+Dokument:   <UID>
+Felder:     email = "name@twomoons.ch"   (String)
+            role  = "admin"              (String)
+```
+
+Die Konsole umgeht die Security Rules, deshalb funktioniert dieser erste Eintrag
+auch ohne bestehende Freischaltung. Alle weiteren Mitglieder lassen sich danach
+genauso anlegen (`role = "member"`). Wer sich anmeldet, ohne freigeschaltet zu
+sein, bekommt seine Benutzer-ID zum Kopieren angezeigt.
+
+### 5. Konfiguration eintragen
+
+`.env.example` nach `.env.local` kopieren und die Werte aus
+*Projekteinstellungen → Allgemein → Meine Apps → Web-App → SDK-Konfiguration*
+einsetzen. Ist dort noch keine Web-App registriert, mit dem `</>`-Symbol eine
+anlegen.
+
+```bash
+cp .env.example .env.local
+npm run dev        # ab jetzt mit Login
+```
+
+`.env.local` ist in `.gitignore` und gehört nicht ins Repository. Die Werte sind
+keine Geheimnisse (sie stehen in jedem ausgelieferten Bundle) – die Absicherung
+leisten die Security Rules, nicht der API-Key.
+
+### 6. Veröffentlichen
+
+```bash
+npm run deploy
+```
+
+## Bestehende Daten übernehmen
+
+Wer die App vorher lokal genutzt hat: vor der Umstellung
+*Einstellungen → Backup exportieren*, danach angemeldet
+*Backup einlesen* → „Zusammenführen". Der Bestand landet damit in Firestore, die
+Preislisten wieder lokal.
+
+## Struktur in Firestore
+
+```
+workspaces/{workspaceId}/members/{uid}        { email, role }
+workspaces/{workspaceId}/items/{itemId}       Bestandseinträge
+workspaces/{workspaceId}/overrides/{id}       Sonderregeln für Sets/Karten
+workspaces/{workspaceId}/games/{gameId}       Spiele
+workspaces/{workspaceId}/photos/{photoId}     Kartenfotos als Data-URL
+workspaces/{workspaceId}/settings/settings    Einstellungen und Preisregeln
+```
+
+Mehrere Standorte oder getrennte Bestände lassen sich über `VITE_WORKSPACE_ID`
+abbilden – jeder Arbeitsbereich hat eine eigene Mitgliederliste.
+
+## Grenzen der aktuellen Umsetzung
+
+* **Fotos** liegen als Data-URL im Firestore-Dokument (Limit 1 MiB pro Dokument).
+  Die App skaliert Bilder vorher auf 900 px und lehnt zu grosse Dateien mit einer
+  Meldung ab. Für viele Fotos ist Firebase Storage die bessere Ablage – dafür
+  müsste `savePhoto`/`getPhoto` in `firebaseRepository.ts` auf Storage umgestellt
+  werden.
+* **Kein Live-Update:** die App lädt beim Start und nach jeder Änderung neu, sie
+  hört nicht per `onSnapshot` mit. Ändert jemand parallel etwas, wird es erst
+  beim nächsten Laden sichtbar.
+* **Offline:** ohne Internet ist die Cloud-Variante nicht nutzbar. Firestore
+  bietet Offline-Persistenz (`persistentLocalCache`), aktiviert ist sie hier
+  nicht.

@@ -6,6 +6,7 @@ import Rules from './pages/Rules';
 import SettingsPage from './pages/Settings';
 import { useStore } from './store';
 import { formatNumber } from './lib/format';
+import { useAuth } from './firebase/authContext';
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: '◑', end: true },
@@ -17,6 +18,7 @@ const NAV = [
 
 export default function App() {
   const { items, priceStats, settings } = useStore();
+  const { user, signOut } = useAuth();
   const priceCount = priceStats.reduce((sum, s) => sum + s.count, 0);
   const badges: Record<string, string> = {
     '/bestand': formatNumber(items.reduce((sum, i) => sum + i.quantity, 0)),
@@ -55,6 +57,19 @@ export default function App() {
         <div className="sidebar__foot">
           <span>{settings.companyName}</span>
           <span>Anzeige in {settings.currency}</span>
+          {user ? (
+            <>
+              <span title={user.email ?? undefined}>{user.email}</span>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                style={{ justifySelf: 'start', paddingInline: 0 }}
+                onClick={() => void signOut()}
+              >
+                Abmelden
+              </button>
+            </>
+          ) : null}
         </div>
       </aside>
 

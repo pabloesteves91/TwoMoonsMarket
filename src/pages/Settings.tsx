@@ -3,10 +3,14 @@ import { repo, type BackupPayload } from '../db';
 import { loadDemoData } from '../lib/demoData';
 import { downloadFile, formatNumber, uid } from '../lib/format';
 import { useStore } from '../store';
+import { useAuth } from '../firebase/authContext';
+import { repositoryKind } from '../db';
 import type { Game, Settings } from '../types';
 
 export default function SettingsPage() {
   const { settings, saveSettings, games, saveGame, deleteGame, refresh, items, priceStats } = useStore();
+  const { user, member, signOut } = useAuth();
+  const cloud = repositoryKind() === 'firebase';
   const [draft, setDraft] = useState<Settings>(settings);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [newGame, setNewGame] = useState<Partial<Game>>({ name: '', short: '', color: '#7a8bd6' });
@@ -273,14 +277,35 @@ export default function SettingsPage() {
       </div>
 
       <div className="card" style={{ marginTop: 16 }}>
-        <div className="card__title">Login &amp; Cloud (später)</div>
-        <p className="card__hint" style={{ marginBottom: 0 }}>
-          Die App läuft bewusst ohne Login. Der gesamte Datenzugriff liegt hinter{' '}
-          <span className="mono">src/db/repository.ts</span>; für den Firebase-Betrieb wird dort ein zweites
-          Repository eingehängt (Firestore + Auth). Die Schritte stehen in{' '}
-          <span className="mono">src/firebase/README.md</span>. Bis dahin gilt: Daten liegen nur in diesem Browser –
-          Backups regelmässig exportieren.
-        </p>
+        <div className="card__title">
+          Konto &amp; Speicherort
+          <span className={`badge badge--${cloud ? 'ok' : 'warn'}`}>{cloud ? 'Cloud (Firestore)' : 'Nur dieses Gerät'}</span>
+        </div>
+        {cloud ? (
+          <>
+            <dl className="kv">
+              <dt>Angemeldet als</dt>
+              <dd>{user?.email ?? '–'}</dd>
+              <dt>Rolle</dt>
+              <dd>{member?.role === 'admin' ? 'Administration' : 'Team'}</dd>
+            </dl>
+            <p className="card__hint" style={{ marginTop: 12 }}>
+              Bestand, Regeln und Einstellungen werden mit allen angemeldeten Geräten geteilt. Die
+              importierten Preislisten bleiben aus Kostengründen lokal auf jedem Gerät – der Import muss
+              also pro Gerät einmal laufen.
+            </p>
+            <button type="button" className="btn btn--sm" onClick={() => void signOut()}>
+              Abmelden
+            </button>
+          </>
+        ) : (
+          <p className="card__hint" style={{ marginBottom: 0 }}>
+            Die App läuft ohne Login; alle Daten liegen nur in diesem Browser. Für den gemeinsamen Bestand
+            über mehrere Geräte die Firebase-Zugangsdaten in <span className="mono">.env.local</span>{' '}
+            hinterlegen – die Schritte stehen in <span className="mono">src/firebase/README.md</span>. Bis
+            dahin: Backups regelmässig exportieren.
+          </p>
+        )}
       </div>
     </>
   );

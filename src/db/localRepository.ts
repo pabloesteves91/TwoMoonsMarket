@@ -26,6 +26,12 @@ export const DEFAULT_GAMES: Game[] = [
   },
 ];
 
+/** Liest einen beliebigen Preis-Datensatz eines Spiels – für den Zeitstempel des letzten Imports. */
+export async function getPriceSample(gameId: string): Promise<PriceEntry | undefined> {
+  const sample = await db.prices.where('gameId').equals(gameId).limit(1).toArray();
+  return sample[0];
+}
+
 async function ensureSeed(): Promise<void> {
   const gameCount = await db.games.count();
   if (gameCount === 0) await db.games.bulkPut(DEFAULT_GAMES);
@@ -150,10 +156,7 @@ export const localRepository: Repository = {
       const collection = db.prices.where('gameId').equals(game.id);
       const count = await collection.count();
       let updatedAt: number | null = null;
-      if (count > 0) {
-        const sample = await db.prices.where('gameId').equals(game.id).limit(1).toArray();
-        updatedAt = sample[0]?.updatedAt ?? null;
-      }
+      if (count > 0) updatedAt = (await getPriceSample(game.id))?.updatedAt ?? null;
       stats.push({ gameId: game.id, count, updatedAt });
     }
     return stats;
