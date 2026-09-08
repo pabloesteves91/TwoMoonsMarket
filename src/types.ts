@@ -83,6 +83,27 @@ export interface PriceEntry {
   source?: string;
 }
 
+/**
+ * Ein Block der Preisliste: alle Einträge, deren Name ein Wort mit diesem
+ * Anfang enthält. Die Preislisten werden blockweise gespeichert, weil
+ * hunderttausende Einzelzeilen in IndexedDB zu langsam zu schreiben sind.
+ */
+export interface PriceBucket {
+  /** `${gameId}:${bucketKey}` */
+  id: string;
+  gameId: GameId;
+  bucketKey: string;
+  entries: PriceEntry[];
+}
+
+/** Kennzahlen je Spiel, damit Anzahl und Stand ohne Vollzugriff bekannt sind. */
+export interface PriceMeta {
+  gameId: GameId;
+  count: number;
+  updatedAt: number;
+  source?: string;
+}
+
 /** Verfügbare Preisbasen für die Aufschlagsregel. */
 export const PRICE_BASES = [
   'trend',

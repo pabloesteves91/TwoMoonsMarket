@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Game, InventoryItem, Photo, PriceEntry, RuleOverride, Settings } from '../types';
+import type { Game, InventoryItem, Photo, PriceBucket, PriceMeta, RuleOverride, Settings } from '../types';
 
 /**
  * Lokale Datenbank (IndexedDB). Sie ist absichtlich hinter dem Repository in
@@ -8,7 +8,8 @@ import type { Game, InventoryItem, Photo, PriceEntry, RuleOverride, Settings } f
  */
 export class TwoMoonsDb extends Dexie {
   games!: Table<Game, string>;
-  prices!: Table<PriceEntry, string>;
+  priceBuckets!: Table<PriceBucket, string>;
+  priceMeta!: Table<PriceMeta, string>;
   items!: Table<InventoryItem, string>;
   overrides!: Table<RuleOverride, string>;
   photos!: Table<Photo, string>;
@@ -24,6 +25,31 @@ export class TwoMoonsDb extends Dexie {
       photos: 'id',
       settings: 'id',
     });
+
+    /**
+     * Version 2 speichert die Preislisten nicht mehr zeilenweise.
+     *
+     * Gemessen in Chromium: 198 000 Einzelzeilen zu schreiben dauert allein
+     * wegen der Indexpflege über drei Minuten – für einen Preisabruf auf dem
+     * Handy unbrauchbar. Stattdessen liegen die Einträge jetzt in Blöcken:
+     * ein Block je Wortanfang (drei Zeichen), das sind einige tausend Zeilen
+     * statt hunderttausender.
+     *
+     * Ein Eintrag liegt in jedem Block seiner Wörter, damit die Suche nach
+     * "bolt" auch "Lightning Bolt" findet.
+     */
+    this.version(2)
+      .stores({
+        prices: null,
+        priceBuckets: 'id, gameId',
+        priceMeta: 'gameId',
+      })
+      .upgrade(async (tx) => {
+        // Die alte Tabelle wird verworfen; die Preise sind mit einem Tipp
+        // unter "Preise" wieder da und der Neuaufbau ist schneller als eine
+        // Umwandlung von 200 000 Zeilen.
+        await tx.table('priceMeta').clear();
+      });
   }
 }
 

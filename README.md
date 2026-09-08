@@ -72,7 +72,7 @@ angemeldeten Geräte denselben Bestand.
 | --- | --- |
 | **Dashboard** | Kartenanzahl, Verkaufswert, Einkaufswert, Marge, wertvollste Positionen, Stand der Preisliste |
 | **Bestand** | Zustand (MT–PO), Sprache, Foil, Menge, Lagerort, Einkaufspreis, Fixpreis, Notiz, Foto; Suche, Filter, Sortierung; CSV-Export |
-| **Preise** | Import der Cardmarket-Preisliste (JSON/CSV, Drag & Drop), Suche in der Preisliste mit berechnetem Verkaufspreis |
+| **Preise** | Preisabruf mit einem Tipp, Import per Drag & Drop (JSON/CSV), Suche in der Preisliste mit berechnetem Verkaufspreis |
 | **Regeln** | Getrennte Preisregeln für Foil und Non-Foil, Sonderregeln pro Set und pro Karte, optionale Zustandsfaktoren |
 | **Einstellungen** | Währung EUR/CHF, Spiele verwalten, Backup exportieren/einlesen, Demo-Daten, Zurücksetzen |
 
@@ -119,8 +119,10 @@ veröffentlicht sie zusammen mit der App unter `/prices/`. In der App erscheint
 dann unter **Preise** der Knopf **„Preise jetzt aktualisieren"** – ein Tipp
 genügt, auch auf dem Handy. Kein Datei-Download, kein Rechner.
 
-Weil die Preislisten pro Gerät lokal liegen, muss der Knopf auf jedem Gerät
-einmal getippt werden. Schlägt der Abruf bei Cardmarket fehl, bleiben die zuletzt
+Der Abruf ersetzt die Liste des jeweiligen Spiels vollständig. Weil die
+Preislisten pro Gerät lokal liegen, muss der Knopf auf jedem Gerät einmal
+getippt werden – für Magic und Pokémon zusammen sind das knapp 200 000 Karten,
+rund 3 MB über die Leitung. Schlägt der Abruf bei Cardmarket fehl, bleiben die zuletzt
 veröffentlichten Dateien stehen und der Grund steht im Actions-Protokoll.
 
 ### Variante B – am Rechner
@@ -192,6 +194,14 @@ Im lokalen Modus gilt weiterhin: die Daten liegen nur in diesem einen Browser,
 also regelmässig *Einstellungen → Backup exportieren*. Der Umzug in die Cloud
 läuft über *Backup exportieren* → anmelden → *Backup einlesen*.
 
+Die Suche findet Karten über den Wortanfang: „bolt" führt zu „Lightning Bolt",
+„light bol" ebenfalls. Eine Suche nach Wortteilen in der Mitte („ightn") gibt es
+nicht – bei knapp 200 000 Karten wäre das auf dem Handy zu langsam.
+
+Das Backup enthält Bestand, Regeln, Fotos und Einstellungen, aber **keine
+Preislisten** – die sind mit einem Tipp neu abgerufen und würden die Datei nur
+um zweistellige Megabyte aufblähen.
+
 Technisch liegt der gesamte Datenzugriff hinter dem Interface `Repository`
 (`src/db/repository.ts`); `localRepository` und `firebaseRepository` erfüllen es
 gleichermassen, die Oberfläche kennt den Unterschied nicht.
@@ -210,6 +220,7 @@ src/lib/cardmarket.ts       Import-Parser (JSON/CSV, Spaltenerkennung)
 src/lib/cloudPrices.ts      Preisabruf aus dem Web (/prices/index.json)
 src/lib/exporters.ts        CSV-Export-Formate
 src/db/                     Repository-Interface + IndexedDB-Implementierung
+                            (Schema v2 ist auf ~200 000 Preis-Datensätze ausgelegt)
 src/firebase/               Firestore-Repository, Login-Gate, Konfiguration
 src/pages/                  Dashboard, Bestand, Preise, Regeln, Einstellungen
 src/components/             Modal, Bestandsformular, Regel-Editor, Foto-Upload

@@ -69,38 +69,51 @@ export async function importPricesFromCloud(
   const skippedFiles: string[] = [];
   let imported = 0;
 
-  // Pro Spiel sammeln, damit Katalog (Namen) und Preisliste (Preise) vor dem
-  // Schreiben zu je einem Datensatz verschmelzen.
-  const perGame = new Map<string, Map<string, PriceEntry>>();
-
-  for (const [index, entry] of relevant.entries()) {
+  // Nach Spiel gruppiert und je Spiel sofort geschrieben: so liegen nie die
+  // Daten beider Spiele gleichzeitig im Speicher. Bei ~200 000 Karten macht das
+  // auf dem Handy den Unterschied.
+  const byGame = new Map<string, PriceManifestFile[]>();
+  for (const entry of relevant) {
     const gameId = gameByCardmarketId.get(entry.cardmarketGameId)!;
-    onProgress?.({ file: entry.file, index, total: relevant.length, phase: 'download' });
-
-    let text: string;
-    try {
-      const response = await fetch(`prices/${entry.file}`, { cache: 'no-store' });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      text = await response.text();
-    } catch {
-      skippedFiles.push(entry.file);
-      continue;
-    }
-
-    onProgress?.({ file: entry.file, index, total: relevant.length, phase: 'parse' });
-    try {
-      const parsed = parsePriceFile(text, gameId, `Cloud · ${entry.file}`);
-      const bucket = perGame.get(gameId) ?? new Map<string, PriceEntry>();
-      for (const item of parsed.entries) bucket.set(item.id, mergeEntries(bucket.get(item.id), item));
-      perGame.set(gameId, bucket);
-    } catch {
-      skippedFiles.push(entry.file);
-    }
+    byGame.set(gameId, [...(byGame.get(gameId) ?? []), entry]);
   }
 
-  for (const [gameId, bucket] of perGame) {
-    onProgress?.({ file: gameId, index: relevant.length, total: relevant.length, phase: 'save' });
-    imported += await repo.upsertPriceEntries([...bucket.values()]);
+  let processed = 0;
+  for (const [gameId, files] of byGame) {
+    // Katalog und Preisliste eines Spiels gehören über die Produkt-ID zusammen
+    let bucket: Map<string, PriceEntry> | null = new Map<string, PriceEntry>();
+
+    for (const entry of files) {
+      onProgress?.({ file: entry.file, index: processed, total: relevant.length, phase: 'download' });
+      let text: string;
+      try {
+        const response = await fetch(`prices/${entry.file}`, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        text = await response.text();
+      } catch {
+        skippedFiles.push(entry.file);
+        processed++;
+        continue;
+      }
+
+      onProgress?.({ file: entry.file, index: processed, total: relevant.length, phase: 'parse' });
+      try {
+        const parsed = parsePriceFile(text, gameId, `Cloud · ${entry.file}`);
+        for (const item of parsed.entries) bucket.set(item.id, mergeEntries(bucket.get(item.id), item));
+      } catch {
+        skippedFiles.push(entry.file);
+      }
+      processed++;
+    }
+
+    if (bucket.size > 0) {
+      onProgress?.({ file: gameId, index: processed, total: relevant.length, phase: 'save' });
+      // Der Abruf liefert die vollständige Liste des Spiels – Ersetzen ist hier
+      // deutlich schneller, als jede Zeile einzeln abzugleichen.
+      const entries = [...bucket.values()];
+      bucket = null;
+      imported += await repo.upsertPriceEntries(entries, { mode: 'replace', gameId });
+    }
   }
 
   return { imported, files: relevant.length - skippedFiles.length, skippedFiles, createdAt: manifest.createdAt };

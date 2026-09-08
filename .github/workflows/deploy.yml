@@ -4,8 +4,12 @@ name: Deploy
 # auf Firebase Hosting. Läuft bei jedem Push auf den Entwicklungszweig, täglich
 # um 05:15 UTC für frische Preise, und auf Knopfdruck ("Run workflow").
 on:
+  # Nur der Standard-Branch veröffentlicht. Ein Feature-Branch soll die Live-Seite
+  # nicht überschreiben, bevor der Pull Request zusammengeführt ist.
   push:
-    branches: [main, claude/tcg-collector-app-oukxlm]
+    branches: [main]
+  pull_request:
+    branches: [main]
   schedule:
     - cron: '15 5 * * *'
   workflow_dispatch:
@@ -77,6 +81,7 @@ jobs:
         run: du -sh dist dist/prices 2>/dev/null || du -sh dist
 
       - name: Firebase-Zugangsdaten bereitstellen
+        if: github.event_name != 'pull_request'
         env:
           SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
@@ -88,21 +93,22 @@ jobs:
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-key.json" >> "$GITHUB_ENV"
 
       - name: App veröffentlichen
+        if: github.event_name != 'pull_request'
         run: npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --non-interactive
 
       # Getrennter Schritt: fehlt die Firestore-Datenbank noch, soll die App
       # trotzdem online gehen – die Meldung sagt dann, was zu tun ist.
       - name: Security Rules veröffentlichen
-        continue-on-error: true
+        if: github.event_name != 'pull_request'
         run: |
           if ! npx --yes firebase-tools@latest deploy --only firestore:rules --project "$FIREBASE_PROJECT" --non-interactive; then
-            echo "::warning::Security Rules konnten nicht veröffentlicht werden. Häufigste Ursache: dem Dienstkonto fehlt die Rolle 'Service Usage Consumer' (Fehler 403 auf serviceusage.googleapis.com). Bis dahin lassen sich die Regeln aus firestore.rules direkt in der Firebase-Konsole unter Firestore Database → Regeln einfügen."
-            exit 1
+            echo "::warning::Security Rules konnten nicht veröffentlicht werden. Häufigste Ursache: dem Dienstkonto fehlt die Rolle 'Service Usage Consumer' (Fehler 403 auf serviceusage.googleapis.com). Solange gelten die in der Firebase-Konsole veröffentlichten Regeln weiter – sie werden von diesem Lauf nicht verändert."
           fi
 
       - name: Zugangsdaten entfernen
-        if: always()
+        if: always() && github.event_name != 'pull_request'
         run: rm -f "$RUNNER_TEMP/firebase-key.json"
 
       - name: Ergebnis
+        if: github.event_name != 'pull_request'
         run: echo "Veröffentlicht auf ${LIVE_URL}" >> "$GITHUB_STEP_SUMMARY"

@@ -115,6 +115,8 @@ Wichtig zum Verständnis:
 
 * Der Knopf muss **pro Gerät** einmal getippt werden, weil die Preislisten lokal
   liegen (siehe Tabelle oben). Der Bestand dagegen ist sofort überall gleich.
+* Der Abruf **ersetzt** die Liste des jeweiligen Spiels vollständig. Von Hand
+  hochgeladene Zusatzdateien für dasselbe Spiel werden dabei überschrieben.
 * Schlägt der Abruf bei Cardmarket fehl, bricht der Deploy nicht ab: die zuletzt
   veröffentlichten Preisdateien bleiben stehen, und im Actions-Protokoll steht der
   Grund. Der manuelle Upload unter *Preise* funktioniert weiterhin.

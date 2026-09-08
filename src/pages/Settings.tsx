@@ -137,6 +137,10 @@ export default function SettingsPage() {
               </div>
             ))}
           </dl>
+          <p className="small dim" style={{ marginTop: 12, marginBottom: 0 }}>
+            Das Backup enthält Bestand, Regeln, Fotos und Einstellungen. Die Preislisten bleiben aussen vor –
+            sie sind unter <em>Preise</em> mit einem Tipp wieder da.
+          </p>
           <div className="row" style={{ marginTop: 14 }}>
             <button type="button" className="btn btn--sm" onClick={() => void exportBackup()}>
               Backup exportieren

@@ -17,7 +17,15 @@ export interface Repository {
 
   getPriceEntries(gameId?: string): Promise<PriceEntry[]>;
   countPriceEntries(gameId?: string): Promise<number>;
-  upsertPriceEntries(entries: PriceEntry[]): Promise<number>;
+  /**
+   * Schreibt Preis-Datensätze.
+   *
+   * `merge` (Standard) führt sie mit vorhandenen zusammen – nötig, wenn Katalog
+   * und Preisliste als getrennte Dateien hochgeladen werden.
+   * `replace` ersetzt die Liste eines Spiels vollständig und kommt ohne
+   * Lesezugriffe aus; das ist der Weg für den Abruf einer kompletten Liste.
+   */
+  upsertPriceEntries(entries: PriceEntry[], options?: UpsertOptions): Promise<number>;
   clearPriceEntries(gameId?: string): Promise<void>;
   searchPriceEntries(query: string, gameId?: string, limit?: number): Promise<PriceEntry[]>;
   /**
@@ -45,6 +53,12 @@ export interface Repository {
   resetAll(): Promise<void>;
 }
 
+export interface UpsertOptions {
+  mode?: 'merge' | 'replace';
+  /** Bei `replace` erforderlich: das Spiel, dessen Liste ersetzt wird. */
+  gameId?: string;
+}
+
 export interface PriceStats {
   gameId: string;
   count: number;
@@ -57,7 +71,12 @@ export interface BackupPayload {
   exportedAt: string;
   games: Game[];
   settings: Settings;
-  prices: PriceEntry[];
+  /**
+   * Preislisten sind seit Version 0.2 nicht mehr Teil des Backups: sie sind mit
+   * einem Tipp neu abrufbar und hätten die Datei um zweistellige Megabyte
+   * aufgebläht. Ältere Backups bringen sie noch mit und werden weiter gelesen.
+   */
+  prices?: PriceEntry[];
   items: InventoryItem[];
   overrides: RuleOverride[];
   photos: Photo[];
