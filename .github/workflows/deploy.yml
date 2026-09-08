@@ -20,9 +20,13 @@ on:
         type: boolean
         default: false
 
+# Prüfläufe eines Zweigs lösen sich gegenseitig ab und laufen in einer eigenen
+# Reihe. Vorher teilten sie sich eine Reihe mit der Veröffentlichung: ein
+# hängender Prüflauf hielt damit den Deploy von main auf, obwohl er nichts
+# veröffentlicht.
 concurrency:
-  group: deploy
-  cancel-in-progress: false
+  group: deploy-${{ github.event_name == 'pull_request' && github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   FIREBASE_PROJECT: twomoonsmarket-c7649
