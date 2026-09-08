@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Modal from './Modal';
 import PhotoInput from './PhotoInput';
 import { repo } from '../db';
-import { formatMoney, uid } from '../lib/format';
+import { formatMoney, formatNumber, uid } from '../lib/format';
 import {
   PRICE_BASES,
   PRICE_BASIS_LABELS,
@@ -49,7 +50,7 @@ function emptyItem(gameId: string): InventoryItem {
 }
 
 export default function ItemForm({ item, onClose }: ItemFormProps) {
-  const { games, settings, overrides, saveItem, deleteItem } = useStore();
+  const { games, settings, overrides, saveItem, deleteItem, priceStats } = useStore();
   const [draft, setDraft] = useState<InventoryItem>(item ?? emptyItem(games[0]?.id ?? 'mtg'));
   const [suggestions, setSuggestions] = useState<PriceEntry[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -60,8 +61,14 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
   /** Zähler und Rückmeldung für die Serienerfassung */
   const [savedCount, setSavedCount] = useState(0);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [searching, setSearching] = useState(false);
   const searchTimer = useRef<number>();
   const nameRef = useRef<HTMLInputElement>(null);
+
+  const game = games.find((entry) => entry.id === draft.gameId);
+  /** Ohne geladene Preisliste kann die App weder vorschlagen noch rechnen. */
+  const priceCount = priceStats.find((stat) => stat.gameId === draft.gameId)?.count ?? 0;
+  const hasPriceList = priceCount > 0;
 
   const patch = (changes: Partial<InventoryItem>) => setDraft((prev) => ({ ...prev, ...changes }));
 
@@ -72,8 +79,12 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
       setSuggestions([]);
       return;
     }
+    setSearching(true);
     searchTimer.current = window.setTimeout(() => {
-      void repo.searchPriceEntries(draft.name, draft.gameId, 12).then(setSuggestions);
+      void repo.searchPriceEntries(draft.name, draft.gameId, 12).then((hits) => {
+        setSuggestions(hits);
+        setSearching(false);
+      });
     }, 220);
     return () => window.clearTimeout(searchTimer.current);
   }, [draft.name, draft.gameId]);
@@ -247,7 +258,29 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
             setShowSuggestions(true);
           }}
           onFocus={() => setShowSuggestions(true)}
+          onBlur={() => window.setTimeout(() => setShowSuggestions(false), 150)}
         />
+        {!hasPriceList ? (
+          <p className="notice notice--warn" style={{ marginTop: 6 }}>
+            Für {game?.name ?? 'dieses Spiel'} ist noch keine Preisliste geladen – deshalb gibt es weder
+            Vorschläge noch einen berechneten Preis.{' '}
+            <Link to="/preise" onClick={onClose}>
+              Jetzt laden
+            </Link>{' '}
+            (dauert etwa eine Viertelminute, danach schlägt die App beim Tippen Karten vor).
+          </p>
+        ) : draft.name.trim().length >= 2 && !searching && suggestions.length === 0 ? (
+          <p className="small dim" style={{ marginTop: 6 }}>
+            Keine Karte mit diesem Namen in der Preisliste von {game?.short ?? game?.name}. Die Suche geht über
+            Wortanfänge – „aang" findet „Aang, Swift Nomad". Stimmt das Spiel oben?
+          </p>
+        ) : hasPriceList && draft.name.trim().length < 2 ? (
+          <p className="small dim" style={{ marginTop: 6 }}>
+            Ab zwei Buchstaben schlägt die App Karten aus {formatNumber(priceCount)} Einträgen vor – Auswählen
+            füllt Set und Preis automatisch.
+          </p>
+        ) : null}
+
         {showSuggestions && suggestions.length > 0 ? (
           <ul
             className="list-reset card card--pad-sm"
@@ -265,7 +298,13 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
                     {entry.name}
                     {entry.set ? <span className="cell-sub"> · {entry.set}</span> : null}
                   </span>
-                  <span className="dim small">{formatMoney(entry.trend ?? entry.avg ?? null, settings)}</span>
+                  <span className="dim small">
+                    {entry.trend ?? entry.avg ?? entry.low ?? entry.foilTrend ? (
+                      formatMoney(entry.trend ?? entry.avg ?? entry.low ?? null, settings)
+                    ) : (
+                      <span className="badge badge--warn">ohne Preis</span>
+                    )}
+                  </span>
                 </button>
               </li>
             ))}
@@ -429,7 +468,26 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
         </div>
         {preview.sellPrice === null ? (
           <p className="notice notice--warn" style={{ margin: 0 }}>
-            {preview.reason ?? 'Kein Preis berechenbar.'}
+            {!hasPriceList ? (
+              <>
+                Noch keine Preisliste für {game?.name ?? 'dieses Spiel'} geladen.{' '}
+                <Link to="/preise" onClick={onClose}>
+                  Unter „Preise" aktualisieren
+                </Link>{' '}
+                – danach rechnet die App den Verkaufspreis. Bis dahin könnt ihr oben einen Fixpreis eintragen.
+              </>
+            ) : matchedEntry ? (
+              <>
+                Cardmarket führt für „{matchedEntry.name}" derzeit keinen Preis
+                {draft.foil ? ' in Foil' : ''} – das kommt bei selten gehandelten Karten vor. Bitte oben einen
+                Fixpreis eintragen.
+              </>
+            ) : (
+              <>
+                Diese Karte steht nicht in der Preisliste. Tipp: den Namen aus der Vorschlagsliste wählen, dann
+                passt die Schreibweise. Alternativ oben einen Fixpreis eintragen.
+              </>
+            )}
           </p>
         ) : (
           <dl className="kv">

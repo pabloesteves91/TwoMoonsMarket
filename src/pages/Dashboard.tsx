@@ -81,6 +81,14 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {priceStats.every((stat) => stat.count === 0) ? (
+        <p className="notice notice--warn" style={{ marginTop: 16 }}>
+          Auf diesem Gerät ist noch keine Preisliste geladen. Ohne sie schlägt die App beim Erfassen keine
+          Karten vor und rechnet keine Verkaufspreise. <Link to="/preise">Jetzt laden</Link> – das dauert etwa
+          eine Viertelminute und muss pro Gerät einmal gemacht werden.
+        </p>
+      ) : null}
+
       {pending.length > 0 ? (
         <p className="notice notice--ok" style={{ marginTop: 16 }}>
           Bei {formatNumber(pending.length)} Karten weicht der berechnete Preis vom Preis am Kärtchen ab.{' '}
