@@ -37,9 +37,15 @@ const DATA = process.env.POKEMON_DATA_BASE ?? 'https://raw.githubusercontent.com
  */
 const TIME_BUDGET_MS = Number(process.env.POKEMON_TIME_BUDGET_MS ?? 4 * 60 * 1000);
 
-/** Mindestanforderungen, damit eine Edition als erkannt gilt. */
+/**
+ * Mindestanforderungen, damit eine Edition als erkannt gilt.
+ *
+ * Da jedes Produkt nur eine Stimme je Set hat, ist der Anteil unmittelbar
+ * lesbar: die Hälfte der Produkte muss im selben Set liegen. Ein falsches Set
+ * wäre schlimmer als gar keines – im Laden wird danach ausgepreist.
+ */
 export const MATCH_MIN_CARDS = 5;
-export const MATCH_MIN_SHARE = 0.3;
+export const MATCH_MIN_SHARE = 0.5;
 
 /**
  * Vereinheitlicht Kartennamen: Zusätze in Klammern und Sonderzeichen raus.
@@ -104,10 +110,11 @@ export function matchExpansions(groups, setsByName) {
   for (const [expansionId, names] of groups) {
     const votes = new Map();
     for (const name of names) {
-      // Jede Karte stimmt für die Sets ab, in denen ihr Name vorkommt
-      for (const entry of setsByName.get(name) ?? []) {
-        votes.set(entry.setId, (votes.get(entry.setId) ?? 0) + 1);
-      }
+      // Jedes Produkt hat je Set genau eine Stimme. Zählte jeder Druck einzeln,
+      // käme eine Edition auf über 100 % – und Editionen aus lauter
+      // Energiekarten gewännen gegen die Edition, um die es wirklich geht.
+      const sets = new Set((setsByName.get(name) ?? []).map((entry) => entry.setId));
+      for (const setId of sets) votes.set(setId, (votes.get(setId) ?? 0) + 1);
     }
     let best = null;
     for (const [setId, score] of votes) {

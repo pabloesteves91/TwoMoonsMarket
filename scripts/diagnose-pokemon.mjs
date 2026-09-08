@@ -5,7 +5,7 @@
  * Läuft nur auf Knopfdruck im CI, weil der Cardmarket-Katalog von aussen nicht
  * erreichbar ist. Der Lauf verändert nichts, er schreibt nur ins Protokoll.
  */
-import { normalizeName, matchExpansions } from './enrich-pokemon.mjs';
+import { normalizeName, matchExpansions, attacksOf, variantOf, choosePrinting } from './enrich-pokemon.mjs';
 
 const UA = 'TwoMoonsMarket/0.1 (+https://github.com/pabloesteves91/TwoMoonsMarket)';
 const DATA = 'https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/master';
@@ -71,13 +71,29 @@ for (const [id, names] of largest) {
 let inMatched = 0;
 let resolved = 0;
 const misses = [];
+const proben = [];
 for (const [id, match] of matched) {
   for (const name of groups.get(id) ?? []) {
     inMatched++;
-    const found = (byName.get(normalizeName(name)) ?? []).some((e) => e.setId === match.setId);
-    if (found) resolved++;
-    else if (misses.length < 30) misses.push(`${name} [${match.setId}]`);
+    const printings = (byName.get(normalizeName(name)) ?? []).filter((e) => e.setId === match.setId);
+    if (printings.length > 0) {
+      resolved++;
+      if (proben.length < 12) {
+        const card = choosePrinting(
+          printings.slice().sort((a, b) => (parseInt(a.number, 10) || 1e9) - (parseInt(b.number, 10) || 1e9)),
+          { attacks: attacksOf(name), variant: variantOf(name) },
+        );
+        proben.push(`${name} → ${match.setId} Nr. ${card.number}`);
+      }
+    } else if (misses.length < 12) misses.push(`${name} [${match.setId}]`);
   }
 }
 console.log(`\nIn zugeordneten Editionen: ${inMatched} Produkte, davon ${resolved} mit Karte (${((resolved / inMatched) * 100).toFixed(0)} %)`);
-console.log('Nicht gefunden, Beispiele:\n  ' + misses.join('\n  '));
+console.log(`Gesamt: ${resolved} von ${products.length} Cardmarket-Produkten bekämen Set und Nummer`);
+
+// Knappe Treffer sind die gefährlichen: ein falsches Set wäre schlimmer als keines
+const knapp = [...matched].filter(([, m]) => m.share < 0.65).length;
+console.log(`Zuordnungen unter 65 % Anteil (heikel): ${knapp} von ${matched.size}`);
+
+console.log('\nStichprobe:\n  ' + proben.join('\n  '));
+console.log('\nNicht gefunden, Beispiele:\n  ' + misses.join('\n  '));
