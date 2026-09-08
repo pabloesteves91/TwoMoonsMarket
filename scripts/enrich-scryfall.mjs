@@ -21,7 +21,8 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { argv, exit } from 'node:process';
 
 const dir = argv[2] ?? 'dist/prices';
-const UA = 'TwoMoonsMarket/0.1 (TCG-Bestandsverwaltung; Kontakt über GitHub)';
+// Nur ASCII: ein Umlaut im User-Agent führt zu einer abgewiesenen Anfrage
+const UA = 'TwoMoonsMarket/0.1 (+https://github.com/pabloesteves91/TwoMoonsMarket)';
 
 /**
  * Liest einen JSON-Array-Datenstrom Objekt für Objekt.
@@ -78,7 +79,10 @@ async function main() {
   const catalog = await fetch('https://api.scryfall.com/bulk-data', {
     headers: { 'User-Agent': UA, Accept: 'application/json' },
   });
-  if (!catalog.ok) throw new Error(`bulk-data → HTTP ${catalog.status}`);
+  if (!catalog.ok) {
+    const hint = (await catalog.text()).slice(0, 200).replace(/\s+/g, ' ');
+    throw new Error(`bulk-data → HTTP ${catalog.status}: ${hint}`);
+  }
   const bulk = await catalog.json();
   const entry = bulk.data?.find((item) => item.type === 'default_cards');
   if (!entry?.download_uri) throw new Error('Keine Sammeldatei "default_cards" gefunden.');

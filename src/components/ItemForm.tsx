@@ -499,7 +499,10 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
           </p>
         ) : (
           <dl className="kv">
-            <dt>Basis ({PRICE_BASIS_LABELS[preview.basis]})</dt>
+            <dt>
+              Basis ({PRICE_BASIS_LABELS[preview.basis]})
+              {settings.applyConditionFactors ? <span className="dim"> – gilt für NM</span> : null}
+            </dt>
             <dd>{formatMoney(preview.basePrice, settings)}</dd>
             <dt>Aufschlag</dt>
             <dd>+{preview.markupPercent} %</dd>
@@ -520,6 +523,13 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
             <dd>{formatMoney(preview.sellPrice * draft.quantity, settings)}</dd>
           </dl>
         )}
+
+        {settings.applyConditionFactors && draft.condition !== 'NM' && preview.sellPrice !== null ? (
+          <p className="small dim" style={{ marginTop: 10, marginBottom: 0 }}>
+            Cardmarket führt je Karte nur einen Marktpreis, nicht einen je Zustand – die Basis bleibt deshalb
+            gleich. Der Zustand wirkt als Faktor darauf.
+          </p>
+        ) : null}
 
         {/* Cardmarket-Preise beziehen sich auf Near-Mint-Ware. Ohne Zustands-
             faktoren bekommt eine gespielte Karte denselben Preis wie eine

@@ -63,6 +63,7 @@ jobs:
           # Ergänzt Magic um Set-Kürzel, Sammlernummer und Seltenheit; schlägt
           # der Schritt fehl, fehlen nur diese Angaben.
           node scripts/enrich-scryfall.mjs dist/prices
+          node scripts/enrich-pokemon.mjs dist/prices
           node scripts/build-price-bundle.mjs dist/prices
 
       # Schlägt der Abruf fehl (Cardmarket nicht erreichbar oder Format geändert),

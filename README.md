@@ -112,6 +112,15 @@ Im Erfassungsdialog speichert **„+ Nächste"** und hält die Maske offen: Spie
 Set, Zustand, Sprache, Foil und Lagerort bleiben stehen, der Name ist leer und
 fokussiert. Beim Durcharbeiten einer Kiste ändert sich meist nur der Name.
 
+### Warum die Basis beim Zustand gleich bleibt
+
+Cardmarket führt je Karte **einen** Marktpreis, nicht einen je Zustand – die
+Spalten sind Trend, Durchschnitt und Tiefstpreis, keine davon ist zustandsbezogen.
+Die Basis ist also der Marktpreis für Near-Mint-Ware und ändert sich nicht, wenn
+ein anderer Zustand gewählt wird; der Zustand wirkt als Faktor darauf. Echte
+Preise je Zustand gäbe es nur aus den laufenden Angeboten, und die stehen nur
+über die Cardmarket-API mit Verkäufer-Konto zur Verfügung.
+
 ### Preisberechnung
 
 ```
@@ -185,10 +194,22 @@ Die Sammeldatei ist mehrere hundert Megabyte gross und wird deshalb zeilenweise
 verarbeitet. Schlägt der Schritt fehl, fehlen nur diese Angaben; alles andere
 läuft weiter. Datenquelle: Scryfall, frei nutzbar mit Namensnennung.
 
-**Für Pokémon gibt es keine vergleichbare Quelle**, die Cardmarket-Produktnummern
-mitführt – dort bleibt das Set vorerst leer und die App zeigt die
-Produktnummer. `scripts/probe-cardmarket.mjs` sucht bei jedem Lauf weiter nach
-einer öffentlichen Editionsliste.
+### Set-Code und Nummer für Pokémon (pokemontcg.io)
+
+Für Pokémon gibt es keine freie Quelle mit Cardmarket-Produktnummern. Die
+Zuordnung läuft deshalb über die Edition: der Cardmarket-Katalog gruppiert die
+Karten nach `idExpansion`, ohne deren Namen zu kennen. `scripts/enrich-pokemon.mjs`
+prüft für jede Gruppe, in welchem bekannten Set die meisten ihrer Kartennamen
+vorkommen. Stimmen mindestens fünf Karten und 30 Prozent überein, gilt die
+Edition als erkannt und ihre Karten bekommen Set-Code (PTCGO, z.B. „ASR"),
+Sammlernummer und Seltenheit.
+
+Ein Abgleich rein über den Kartennamen wäre unbrauchbar – derselbe Name kommt in
+vielen Sets vor. Über die Gruppe ist er eindeutig. Editionen, die sich nicht
+sicher zuordnen lassen, bleiben ohne Set; dort zeigt die App weiterhin die
+Produktnummer.
+
+Datenquelle: pokemontcg.io, frei und ohne Anmeldung nutzbar.
 
 ### Editionsnamen über die Cardmarket-API (nur mit Verkäufer-Konto)
 
