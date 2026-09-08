@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ItemForm from '../components/ItemForm';
+import SellForm from '../components/SellForm';
 import { useStore, type PricedItem } from '../store';
 import { formatMoney, formatNumber, downloadFile } from '../lib/format';
 import { buildInventoryCsv, EXPORT_LABELS, type ExportFormat } from '../lib/exporters';
@@ -19,6 +20,7 @@ export default function Inventory() {
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'total', dir: 'desc' });
   const [editing, setEditing] = useState<InventoryItem | null>(null);
   const [creating, setCreating] = useState(false);
+  const [selling, setSelling] = useState<PricedItem | null>(null);
   const [photos, setPhotos] = useState<Record<string, string>>({});
 
   const onlyUnpriced = params.get('filter') === 'unpriced';
@@ -301,9 +303,18 @@ export default function Inventory() {
                         {row.margin === null ? '–' : formatMoney(row.margin, settings, { showCode: false })}
                       </td>
                       <td className="num">
-                        <button type="button" className="btn btn--ghost btn--sm" onClick={() => setEditing(row.item)}>
-                          Bearbeiten
-                        </button>
+                        <div className="row" style={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
+                          <button type="button" className="btn btn--sm" onClick={() => setSelling(row)}>
+                            Verkauft
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--ghost btn--sm"
+                            onClick={() => setEditing(row.item)}
+                          >
+                            Bearbeiten
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -315,7 +326,7 @@ export default function Inventory() {
           {/* Mobile: Karten */}
           <div className="item-list mobile-only">
             {rows.map((row) => (
-              <button key={row.item.id} type="button" className="item-card" onClick={() => setEditing(row.item)}>
+              <div key={row.item.id} className="item-card" onClick={() => setEditing(row.item)}>
                 {row.item.photoId && photos[row.item.photoId] ? (
                   <img className="thumb" src={photos[row.item.photoId]} alt="" />
                 ) : (
@@ -338,13 +349,25 @@ export default function Inventory() {
                 <span className="item-card__price">
                   <strong>{formatMoney(row.calc.sellPrice, settings, { showCode: false })}</strong>
                   <span className="cell-sub">{formatMoney(row.totalSell, settings)}</span>
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    style={{ marginTop: 6 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelling(row);
+                    }}
+                  >
+                    Verkauft
+                  </button>
                 </span>
-              </button>
+              </div>
             ))}
           </div>
         </>
       )}
 
+      {selling ? <SellForm row={selling} onClose={() => setSelling(null)} /> : null}
       {creating ? <ItemForm onClose={() => setCreating(false)} /> : null}
       {editing ? <ItemForm item={editing} onClose={() => setEditing(null)} /> : null}
     </>

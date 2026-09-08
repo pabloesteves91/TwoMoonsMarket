@@ -1,4 +1,4 @@
-import type { Game, InventoryItem, Photo, PriceEntry, RuleOverride, Settings } from '../types';
+import type { Game, InventoryItem, Photo, PriceEntry, RuleOverride, Sale, Settings } from '../types';
 
 /**
  * Datenzugriff der App. Aktuell erfüllt `localRepository` (IndexedDB) diese
@@ -40,6 +40,10 @@ export interface Repository {
   saveItem(item: InventoryItem): Promise<void>;
   deleteItem(id: string): Promise<void>;
 
+  getSales(): Promise<Sale[]>;
+  saveSale(sale: Sale): Promise<void>;
+  deleteSale(id: string): Promise<void>;
+
   getOverrides(): Promise<RuleOverride[]>;
   saveOverride(override: RuleOverride): Promise<void>;
   deleteOverride(id: string): Promise<void>;
@@ -78,6 +82,7 @@ export interface BackupPayload {
    */
   prices?: PriceEntry[];
   items: InventoryItem[];
+  sales?: Sale[];
   overrides: RuleOverride[];
   photos: Photo[];
 }

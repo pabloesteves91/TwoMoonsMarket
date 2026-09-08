@@ -73,9 +73,21 @@ angemeldeten Geräte denselben Bestand.
 | **Dashboard** | Kartenanzahl, Verkaufswert, Einkaufswert, Marge, wertvollste Positionen, Stand der Preisliste |
 | **Bestand** | Zustand (MT–PO), Sprache, Foil, Menge, Lagerort, Einkaufspreis, Fixpreis, Notiz, Foto; Serienerfassung, Suche, Filter, Sortierung; CSV-Export |
 | **Freigabe** | Vergleich Kärtchenpreis ↔ berechneter Preis, Änderungen einzeln bestätigen, Liste zum Umetikettieren als CSV |
+| **Verkäufe** | Verkauf buchen (Menge, Preis, Datum, Kanal), Umsatz/Gewinn/Marge, Umsatzverlauf je Woche, Meistverkauft, CSV-Export, Storno |
 | **Preise** | Preisabruf mit einem Tipp, Import per Drag & Drop (JSON/CSV), Suche in der Preisliste mit berechnetem Verkaufspreis |
 | **Regeln** | Getrennte Preisregeln für Foil und Non-Foil, Sonderregeln pro Set und pro Karte, optionale Zustandsfaktoren |
 | **Einstellungen** | Währung EUR/CHF, Spiele verwalten, Backup exportieren/einlesen, Demo-Daten, Zurücksetzen |
+
+### Verkäufe
+
+Im Bestand bucht **„Verkauft"** einen Verkauf: Menge, Preis pro Stück (vorbelegt
+mit dem Kärtchenpreis), Datum und Kanal. Die Menge wird aus dem Bestand
+ausgebucht, der Verkauf bleibt mit Name, Set und Zustand erhalten – auch wenn der
+Bestandseintrag später verschwindet. Ein Storno bucht die Karten zurück.
+
+Unter *Verkäufe* stehen Umsatz, Gewinn und Marge für den gewählten Zeitraum, der
+Umsatzverlauf je Woche, die meistverkauften Karten und die Aufteilung nach Spiel.
+Der Gewinn wird nur aus Verkäufen mit erfasstem Einkaufspreis gerechnet.
 
 ### Preise am Kärtchen: Freigabe statt Automatik
 
@@ -137,7 +149,7 @@ Cardmarket bietet keine offene API, die Preisliste kommt deshalb als Datei in di
 
 ### Variante A – vollautomatisch (empfohlen)
 
-Der GitHub-Actions-Workflow `Deploy` läuft täglich, lädt Preisliste und
+Der GitHub-Actions-Workflow `Deploy` läuft jeden Montagmorgen, lädt Preisliste und
 Produktkatalog, führt beide zu einer schlanken Datei je Spiel zusammen und
 veröffentlicht sie zusammen mit der App unter `/prices/`. In der App erscheint
 dann unter **Preise** der Knopf **„Preise jetzt aktualisieren"** – ein Tipp

@@ -1,5 +1,14 @@
 import Dexie, { type Table } from 'dexie';
-import type { Game, InventoryItem, Photo, PriceBucket, PriceMeta, RuleOverride, Settings } from '../types';
+import type {
+  Game,
+  InventoryItem,
+  Photo,
+  PriceBucket,
+  PriceMeta,
+  RuleOverride,
+  Sale,
+  Settings,
+} from '../types';
 
 /**
  * Lokale Datenbank (IndexedDB). Sie ist absichtlich hinter dem Repository in
@@ -11,6 +20,7 @@ export class TwoMoonsDb extends Dexie {
   priceBuckets!: Table<PriceBucket, string>;
   priceMeta!: Table<PriceMeta, string>;
   items!: Table<InventoryItem, string>;
+  sales!: Table<Sale, string>;
   overrides!: Table<RuleOverride, string>;
   photos!: Table<Photo, string>;
   settings!: Table<Settings, string>;
@@ -50,6 +60,11 @@ export class TwoMoonsDb extends Dexie {
         // Umwandlung von 200 000 Zeilen.
         await tx.table('priceMeta').clear();
       });
+
+    /** Version 3 führt die Verkaufshistorie ein. */
+    this.version(3).stores({
+      sales: 'id, soldAt, gameId, itemId, name',
+    });
   }
 }
 

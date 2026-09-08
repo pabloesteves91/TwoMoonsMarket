@@ -99,7 +99,8 @@ npm run deploy               # App veröffentlichen
 
 ## Preise automatisch aktualisieren
 
-Der Workflow `Deploy` läuft täglich um 05:15 UTC und
+Der Workflow `Deploy` läuft jeden Montag um 05:15 UTC (Sommer 07:15, Winter
+06:15 Schweizer Zeit) und
 
 1. lädt Preisliste **und** Produktkatalog je Spiel von Cardmarket
    (`scripts/import-prices.mjs --index --catalog`),
@@ -159,6 +160,7 @@ Preislisten wieder lokal.
 ```
 workspaces/{workspaceId}/members/{uid}        { email, role }
 workspaces/{workspaceId}/items/{itemId}       Bestandseinträge
+workspaces/{workspaceId}/sales/{saleId}       Verkaufshistorie
 workspaces/{workspaceId}/overrides/{id}       Sonderregeln für Sets/Karten
 workspaces/{workspaceId}/games/{gameId}       Spiele
 workspaces/{workspaceId}/photos/{photoId}     Kartenfotos als Data-URL

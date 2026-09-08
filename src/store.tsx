@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { repo } from './db';
+import { uid } from './lib/format';
 import type { PriceStats } from './db/repository';
 import { buildPriceContext, calculatePrice, findPriceEntry } from './lib/pricing';
 import type {
@@ -16,6 +17,7 @@ import type {
   PriceCalculation,
   PriceEntry,
   RuleOverride,
+  Sale,
   Settings,
 } from './types';
 
@@ -47,6 +49,7 @@ interface StoreValue {
   games: Game[];
   settings: Settings;
   items: InventoryItem[];
+  sales: Sale[];
   overrides: RuleOverride[];
   priceStats: PriceStats[];
   pricedItems: PricedItem[];
@@ -61,6 +64,10 @@ interface StoreValue {
   deleteGame: (id: string) => Promise<void>;
   /** Übernimmt die berechneten Preise als neuen Kärtchenpreis. */
   approvePrices: (itemIds: string[]) => Promise<void>;
+  /** Bucht einen Verkauf und bucht die Menge aus dem Bestand aus. */
+  recordSale: (sale: Sale) => Promise<void>;
+  /** Storniert einen Verkauf; die Menge wandert zurück in den Bestand. */
+  cancelSale: (saleId: string) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -70,15 +77,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [games, setGames] = useState<Game[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
   const [overrides, setOverrides] = useState<RuleOverride[]>([]);
   const [entries, setEntries] = useState<PriceEntry[]>([]);
   const [priceStats, setPriceStats] = useState<PriceStats[]>([]);
 
   const refresh = useCallback(async () => {
-    const [nextGames, nextSettings, nextItems, nextOverrides, stats] = await Promise.all([
+    const [nextGames, nextSettings, nextItems, nextSales, nextOverrides, stats] = await Promise.all([
       repo.getGames(),
       repo.getSettings(),
       repo.getItems(),
+      repo.getSales(),
       repo.getOverrides(),
       repo.getPriceStats(),
     ]);
@@ -86,6 +95,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setGames(nextGames);
     setSettings(nextSettings);
     setItems(nextItems);
+    setSales(nextSales);
     setOverrides(nextOverrides);
     setEntries(nextEntries);
     setPriceStats(stats);
@@ -150,6 +160,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       games,
       settings,
       items,
+      sales,
       overrides,
       priceStats,
       pricedItems,
@@ -183,6 +194,48 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await repo.deleteGame(id);
         await refresh();
       },
+      recordSale: async (sale) => {
+        await repo.saveSale(sale);
+        // Verkaufte Menge aus dem Bestand ausbuchen; ist nichts mehr übrig,
+        // verschwindet der Eintrag aus dem Bestand – der Verkauf bleibt.
+        const item = sale.itemId ? items.find((entry) => entry.id === sale.itemId) : undefined;
+        if (item) {
+          const rest = item.quantity - sale.quantity;
+          if (rest > 0) await repo.saveItem({ ...item, quantity: rest, updatedAt: Date.now() });
+          else await repo.deleteItem(item.id);
+        }
+        await refresh();
+      },
+      cancelSale: async (saleId) => {
+        const sale = sales.find((entry) => entry.id === saleId);
+        await repo.deleteSale(saleId);
+        if (sale) {
+          const item = sale.itemId ? items.find((entry) => entry.id === sale.itemId) : undefined;
+          if (item) {
+            await repo.saveItem({ ...item, quantity: item.quantity + sale.quantity, updatedAt: Date.now() });
+          } else {
+            // Der Bestandseintrag ist beim Verkauf verschwunden – aus den
+            // mitgeschriebenen Angaben lässt er sich wiederherstellen.
+            const now = Date.now();
+            await repo.saveItem({
+              id: sale.itemId ?? uid('item_'),
+              gameId: sale.gameId,
+              name: sale.name,
+              set: sale.set,
+              condition: sale.condition,
+              language: sale.language,
+              foil: sale.foil,
+              quantity: sale.quantity,
+              purchasePrice: sale.purchasePrice,
+              approvedPrice: sale.unitPrice,
+              approvedAt: now,
+              createdAt: now,
+              updatedAt: now,
+            });
+          }
+        }
+        await refresh();
+      },
       approvePrices: async (itemIds) => {
         const wanted = new Set(itemIds);
         const now = Date.now();
@@ -198,7 +251,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await refresh();
       },
     };
-  }, [ready, games, settings, items, overrides, priceStats, pricedItems, refresh]);
+  }, [ready, games, settings, items, sales, overrides, priceStats, pricedItems, refresh]);
 
   if (!value) {
     return (

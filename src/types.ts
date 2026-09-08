@@ -225,6 +225,41 @@ export interface InventoryItem {
   updatedAt: number;
 }
 
+/**
+ * Ein Verkauf. Bewusst mit Kopie von Name, Set und Zustand: der Bestandseintrag
+ * kann später verschwinden, die Verkaufshistorie soll trotzdem lesbar bleiben.
+ */
+export interface Sale {
+  id: string;
+  /** Verknüpfung zum Bestandseintrag, sofern er noch existiert */
+  itemId?: string;
+  gameId: GameId;
+  name: string;
+  set?: string;
+  condition: Condition;
+  language: Language;
+  foil: boolean;
+  quantity: number;
+  /** Verkaufspreis pro Stück in EUR */
+  unitPrice: number;
+  /** Einkaufspreis pro Stück in EUR zum Zeitpunkt des Verkaufs */
+  purchasePrice?: number;
+  soldAt: number;
+  channel: SaleChannel;
+  note?: string;
+  createdAt: number;
+}
+
+export const SALE_CHANNELS = ['laden', 'event', 'online', 'sonstiges'] as const;
+export type SaleChannel = (typeof SALE_CHANNELS)[number];
+
+export const SALE_CHANNEL_LABELS: Record<SaleChannel, string> = {
+  laden: 'Laden',
+  event: 'Event / Turnier',
+  online: 'Online',
+  sonstiges: 'Sonstiges',
+};
+
 export interface Photo {
   id: string;
   /** JPEG als Data-URL, auf max. 900 px skaliert */

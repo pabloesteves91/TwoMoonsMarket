@@ -3,7 +3,16 @@ import { useStore } from '../store';
 import { formatDate, formatMoney, formatNumber, formatPercent } from '../lib/format';
 
 export default function Dashboard() {
-  const { pricedItems, settings, games, priceStats, items } = useStore();
+  const { pricedItems, settings, games, priceStats, items, sales } = useStore();
+
+  // Verkäufe der letzten 30 Tage
+  const since = Date.now() - 30 * 24 * 3600 * 1000;
+  const recent = sales.filter((sale) => sale.soldAt >= since);
+  const revenue30 = recent.reduce((sum, sale) => sum + sale.unitPrice * sale.quantity, 0);
+  const cards30 = recent.reduce((sum, sale) => sum + sale.quantity, 0);
+  const profit30 = recent
+    .filter((sale) => sale.purchasePrice !== undefined)
+    .reduce((sum, sale) => sum + (sale.unitPrice - (sale.purchasePrice ?? 0)) * sale.quantity, 0);
 
   const totalUnits = items.reduce((sum, item) => sum + item.quantity, 0);
   const sellValue = pricedItems.reduce((sum, row) => sum + (row.totalSell ?? 0), 0);
@@ -48,6 +57,9 @@ export default function Dashboard() {
           <Link className="btn" to="/preise">
             Preise importieren
           </Link>
+          <Link className="btn" to="/verkaeufe">
+            Verkäufe
+          </Link>
           <Link className="btn btn--primary" to="/bestand">
             Bestand öffnen
           </Link>
@@ -72,6 +84,14 @@ export default function Dashboard() {
           <div className="stat__value">{formatMoney(costValue, settings)}</div>
           <div className="stat__hint">
             {marginPercent === null ? 'keine Einkaufspreise erfasst' : `Marge ${formatPercent(marginPercent)}`}
+          </div>
+        </div>
+        <div className="stat">
+          <div className="stat__label">Umsatz 30 Tage</div>
+          <div className="stat__value">{formatMoney(revenue30, settings)}</div>
+          <div className="stat__hint">
+            {formatNumber(cards30)} Karten
+            {profit30 !== 0 ? ` · Gewinn ${formatMoney(profit30, settings)}` : ''}
           </div>
         </div>
         <div className="stat">

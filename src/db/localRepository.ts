@@ -265,6 +265,17 @@ export const localRepository: Repository = {
     if (item?.photoId) await db.photos.delete(item.photoId);
   },
 
+  async getSales() {
+    const sales = await db.sales.toArray();
+    return sales.sort((a, b) => b.soldAt - a.soldAt);
+  },
+  async saveSale(sale) {
+    await db.sales.put(sale);
+  },
+  async deleteSale(id) {
+    await db.sales.delete(id);
+  },
+
   async getOverrides() {
     return db.overrides.toArray();
   },
@@ -293,6 +304,7 @@ export const localRepository: Repository = {
       db.overrides.toArray(),
       db.photos.toArray(),
     ]);
+    const sales = await db.sales.toArray();
     return {
       app: 'twomoons-market',
       version: 1,
@@ -300,6 +312,7 @@ export const localRepository: Repository = {
       games,
       settings,
       items,
+      sales,
       overrides,
       photos,
     };
@@ -307,12 +320,19 @@ export const localRepository: Repository = {
 
   async importAll(payload, mode) {
     if (payload.app !== 'twomoons-market') throw new Error('Datei stammt nicht aus TwoMoons Market.');
-    await db.transaction('rw', [db.games, db.items, db.overrides, db.photos, db.settings], async () => {
+    await db.transaction('rw', [db.games, db.items, db.sales, db.overrides, db.photos, db.settings], async () => {
       if (mode === 'replace') {
-        await Promise.all([db.games.clear(), db.items.clear(), db.overrides.clear(), db.photos.clear()]);
+        await Promise.all([
+          db.games.clear(),
+          db.items.clear(),
+          db.sales.clear(),
+          db.overrides.clear(),
+          db.photos.clear(),
+        ]);
       }
       if (payload.games?.length) await db.games.bulkPut(payload.games);
       if (payload.items?.length) await db.items.bulkPut(payload.items);
+      if (payload.sales?.length) await db.sales.bulkPut(payload.sales);
       if (payload.overrides?.length) await db.overrides.bulkPut(payload.overrides);
       if (payload.photos?.length) await db.photos.bulkPut(payload.photos);
       if (payload.settings) await db.settings.put({ ...payload.settings, id: 'settings' });
@@ -328,13 +348,14 @@ export const localRepository: Repository = {
   async resetAll() {
     await db.transaction(
       'rw',
-      [db.games, db.priceBuckets, db.priceMeta, db.items, db.overrides, db.photos, db.settings],
+      [db.games, db.priceBuckets, db.priceMeta, db.items, db.sales, db.overrides, db.photos, db.settings],
       async () => {
         await Promise.all([
           db.games.clear(),
           db.priceBuckets.clear(),
           db.priceMeta.clear(),
           db.items.clear(),
+          db.sales.clear(),
           db.overrides.clear(),
           db.photos.clear(),
           db.settings.clear(),

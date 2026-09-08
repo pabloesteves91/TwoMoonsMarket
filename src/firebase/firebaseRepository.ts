@@ -14,7 +14,7 @@ import { WORKSPACE_ID } from './env';
 import { DEFAULT_GAMES, getPriceMetaMap, localRepository } from '../db/localRepository';
 import { DEFAULT_SETTINGS } from '../lib/pricing';
 import type { BackupPayload, PriceStats, Repository } from '../db/repository';
-import type { Game, InventoryItem, Photo, RuleOverride, Settings } from '../types';
+import type { Game, InventoryItem, Photo, RuleOverride, Sale, Settings } from '../types';
 
 /**
  * Firestore-Backend.
@@ -145,6 +145,17 @@ export const firebaseRepository: Repository = {
     if (photoId) await deleteDoc(doc(col('photos'), photoId));
   },
 
+  async getSales() {
+    const sales = await readAll<Sale>('sales');
+    return sales.sort((a, b) => b.soldAt - a.soldAt);
+  },
+  async saveSale(sale) {
+    await setDoc(doc(col('sales'), sale.id), clean(sale as unknown as Record<string, unknown>));
+  },
+  async deleteSale(id) {
+    await deleteDoc(doc(col('sales'), id));
+  },
+
   async getOverrides() {
     return readAll<RuleOverride>('overrides');
   },
@@ -171,10 +182,11 @@ export const firebaseRepository: Repository = {
   },
 
   async exportAll(): Promise<BackupPayload> {
-    const [games, settings, items, overrides, photos] = await Promise.all([
+    const [games, settings, items, sales, overrides, photos] = await Promise.all([
       readAll<Game>('games'),
       this.getSettings(),
       readAll<InventoryItem>('items'),
+      readAll<Sale>('sales'),
       readAll<RuleOverride>('overrides'),
       readAll<Photo>('photos'),
     ]);
@@ -185,6 +197,7 @@ export const firebaseRepository: Repository = {
       games,
       settings,
       items,
+      sales,
       overrides,
       photos,
     };
@@ -196,12 +209,14 @@ export const firebaseRepository: Repository = {
       await Promise.all([
         clearCollection('games'),
         clearCollection('items'),
+        clearCollection('sales'),
         clearCollection('overrides'),
         clearCollection('photos'),
       ]);
     }
     if (payload.games?.length) await writeMany('games', payload.games);
     if (payload.items?.length) await writeMany('items', payload.items);
+    if (payload.sales?.length) await writeMany('sales', payload.sales);
     if (payload.overrides?.length) await writeMany('overrides', payload.overrides);
     if (payload.photos?.length) await writeMany('photos', payload.photos);
     if (payload.settings) await this.saveSettings({ ...payload.settings, id: 'settings' });
@@ -216,6 +231,7 @@ export const firebaseRepository: Repository = {
     await Promise.all([
       clearCollection('games'),
       clearCollection('items'),
+      clearCollection('sales'),
       clearCollection('overrides'),
       clearCollection('photos'),
       clearCollection('settings'),

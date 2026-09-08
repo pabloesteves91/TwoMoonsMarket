@@ -1,8 +1,8 @@
 name: Deploy
 
 # Baut die App, holt die aktuellen Cardmarket-Preise und veröffentlicht beides
-# auf Firebase Hosting. Läuft bei jedem Push auf den Entwicklungszweig, täglich
-# um 05:15 UTC für frische Preise, und auf Knopfdruck ("Run workflow").
+# auf Firebase Hosting. Läuft bei jedem Push auf main, jeden Montagmorgen für
+# frische Preise, und auf Knopfdruck ("Run workflow").
 on:
   # Nur der Standard-Branch veröffentlicht. Ein Feature-Branch soll die Live-Seite
   # nicht überschreiben, bevor der Pull Request zusammengeführt ist.
@@ -11,7 +11,8 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: '15 5 * * *'
+    # Montags 05:15 UTC – im Sommer 07:15, im Winter 06:15 Schweizer Zeit
+    - cron: '15 5 * * 1'
   workflow_dispatch:
     inputs:
       skip_prices:

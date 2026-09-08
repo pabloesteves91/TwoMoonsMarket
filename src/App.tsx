@@ -3,17 +3,24 @@ import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
 import Prices from './pages/Prices';
 import Approvals from './pages/Approvals';
+import Sales from './pages/Sales';
 import Rules from './pages/Rules';
 import SettingsPage from './pages/Settings';
 import { useStore } from './store';
 import { formatNumber } from './lib/format';
 import { useAuth } from './firebase/authContext';
 
+/** Täglich gebraucht – diese stehen am Handy in der Leiste unten. */
 const NAV = [
   { to: '/', label: 'Dashboard', icon: '◑', end: true },
   { to: '/bestand', label: 'Bestand', icon: '▦', end: false },
+  { to: '/verkaeufe', label: 'Verkäufe', icon: '↗', end: false },
   { to: '/preise', label: 'Preise', icon: '€', end: false },
   { to: '/freigabe', label: 'Freigabe', icon: '✓', end: false },
+];
+
+/** Einstellungssachen – am Handy oben in der Kopfzeile. */
+const CONFIG_NAV = [
   { to: '/regeln', label: 'Regeln', icon: '%', end: false },
   { to: '/einstellungen', label: 'Einstellungen', icon: '⚙', end: false },
 ];
@@ -42,7 +49,7 @@ export default function App() {
         </NavLink>
 
         <nav className="nav">
-          {NAV.map((entry) => (
+          {[...NAV, ...CONFIG_NAV].map((entry) => (
             <NavLink
               key={entry.to}
               to={entry.to}
@@ -82,6 +89,19 @@ export default function App() {
           <span className="brand__mark">◑◐</span>
           <span className="brand__name">TwoMoons Market</span>
         </NavLink>
+        <span className="row" style={{ gap: 2, flexWrap: 'nowrap' }}>
+          {CONFIG_NAV.map((entry) => (
+            <NavLink
+              key={entry.to}
+              to={entry.to}
+              className={({ isActive }) => `btn btn--ghost btn--sm${isActive ? ' is-active' : ''}`}
+              aria-label={entry.label}
+              title={entry.label}
+            >
+              {entry.icon}
+            </NavLink>
+          ))}
+        </span>
       </header>
 
       <main className="main">
@@ -90,6 +110,7 @@ export default function App() {
           <Route path="/bestand" element={<Inventory />} />
           <Route path="/preise" element={<Prices />} />
           <Route path="/freigabe" element={<Approvals />} />
+          <Route path="/verkaeufe" element={<Sales />} />
           <Route path="/regeln" element={<Rules />} />
           <Route path="/einstellungen" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
