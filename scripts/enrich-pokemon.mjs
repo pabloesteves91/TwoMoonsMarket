@@ -41,15 +41,37 @@ const TIME_BUDGET_MS = Number(process.env.POKEMON_TIME_BUDGET_MS ?? 4 * 60 * 100
 export const MATCH_MIN_CARDS = 5;
 export const MATCH_MIN_SHARE = 0.3;
 
-/** Vereinheitlicht Kartennamen: Zusätze in Klammern und Sonderzeichen raus. */
+/**
+ * Vereinheitlicht Kartennamen: Zusätze in Klammern und Sonderzeichen raus.
+ *
+ * Cardmarket hängt bei Pokémon die Attacken in eckigen Klammern an –
+ * "Ninetales [Lure | Fire Blast]". Ohne sie zu entfernen findet kein einziger
+ * dieser Namen seine Karte.
+ */
 export function normalizeName(name) {
   return String(name)
     .toLowerCase()
+    .replace(/\[[^\]]*\]/g, ' ')
     .replace(/\([^)]*\)/g, ' ')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
+}
+
+/**
+ * Liest die Attacken aus einem Cardmarket-Namen.
+ *
+ * Genau daran lässt sich der richtige Druck erkennen: kommt ein Pokémon
+ * mehrfach in derselben Edition vor, unterscheiden sich die Attacken.
+ */
+export function attacksOf(name) {
+  const match = /\[([^\]]*)\]/.exec(String(name));
+  if (!match) return [];
+  return match[1]
+    .split('|')
+    .map((part) => normalizeName(part))
+    .filter(Boolean);
 }
 
 /**
@@ -152,7 +174,12 @@ async function loadFromDataFiles() {
         const list = await getJson(`${DATA}/cards/en/${set.id}.json`);
         for (const card of list ?? []) {
           const key = normalizeName(card.name);
-          const entry = { setId: set.id, number: card.number, rarity: card.rarity };
+          const entry = {
+            setId: set.id,
+            number: card.number,
+            rarity: card.rarity,
+            attacks: (card.attacks ?? []).map((attack) => normalizeName(attack.name)),
+          };
           const existing = byName.get(key);
           if (existing) existing.push(entry);
           else byName.set(key, [entry]);
@@ -205,7 +232,12 @@ async function loadFromApi() {
         const list = body.data ?? [];
         for (const card of list) {
           const key = normalizeName(card.name);
-          const entry = { setId: set.id, number: card.number, rarity: card.rarity };
+          const entry = {
+            setId: set.id,
+            number: card.number,
+            rarity: card.rarity,
+            attacks: (card.attacks ?? []).map((attack) => normalizeName(attack.name)),
+          };
           const existing = byName.get(key);
           if (existing) existing.push(entry);
           else byName.set(key, [entry]);
@@ -243,6 +275,33 @@ async function loadKnownCards() {
   }
 }
 
+/**
+ * Wählt unter mehreren Drucken derselben Karte den gemeinten aus.
+ *
+ * Erste Wahl sind die Attacken aus dem Cardmarket-Namen – sie benennen den Druck
+ * eindeutig. Fehlen sie (Trainer, Energie), entscheidet der Zusatz (V1)/(V2),
+ * sonst der erste Druck nach Sammlernummer.
+ */
+export function choosePrinting(printings, product) {
+  const wanted = product.attacks ?? [];
+  let candidates = printings;
+
+  if (wanted.length > 0) {
+    const scored = printings.map((printing) => {
+      const have = printing.attacks ?? [];
+      const shared = wanted.filter((attack) => have.includes(attack)).length;
+      // Gleich viele Treffer: der Druck mit genau diesen Attacken passt besser
+      return { printing, rank: shared * 2 + (shared === wanted.length && have.length === wanted.length ? 1 : 0) };
+    });
+    const top = Math.max(...scored.map((entry) => entry.rank));
+    if (top > 0) candidates = scored.filter((entry) => entry.rank === top).map((entry) => entry.printing);
+  }
+
+  // Bleiben mehrere übrig, sind es alternative Illustrationen derselben Karte.
+  // Cardmarket zählt sie mit (V1), (V2) durch – in der Reihenfolge der Nummern.
+  return candidates[Math.min(product.variant ?? 1, candidates.length) - 1];
+}
+
 async function main() {
   let index;
   try {
@@ -274,7 +333,9 @@ async function main() {
       productsByExpansion.set(expansionId, []);
     }
     groups.get(expansionId).push(key);
-    productsByExpansion.get(expansionId).push({ id, key, variant: variantOf(product.name) });
+    productsByExpansion
+      .get(expansionId)
+      .push({ id, key, variant: variantOf(product.name), attacks: attacksOf(product.name) });
   }
   console.log(`· Cardmarket: ${products.length.toLocaleString('de-CH')} Produkte in ${groups.size} Editionen`);
 
@@ -292,8 +353,7 @@ async function main() {
         .filter((entry) => entry.setId === match.setId)
         .sort((a, b) => numeric(a.number) - numeric(b.number));
       if (printings.length === 0) continue;
-      // V2 ist der zweite Druck derselben Karte; gibt es ihn nicht, bleibt es beim ersten
-      const card = printings[Math.min(product.variant, printings.length) - 1];
+      const card = choosePrinting(printings, product);
       meta[product.id] = { set: code, setName: set?.name, number: card.number, rarity: card.rarity };
     }
   }
