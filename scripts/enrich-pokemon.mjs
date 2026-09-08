@@ -69,14 +69,28 @@ export function matchExpansions(groups, setsByName) {
   return result;
 }
 
+/**
+ * Holt JSON und wiederholt bei Überlastung. Neben 429 (zu viele Anfragen)
+ * werden auch 5xx wiederholt: die API antwortet zeitweise mit 502.
+ */
 async function getJson(url, attempt = 1) {
-  const response = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json' } });
-  if (response.status === 429 && attempt <= 3) {
-    await new Promise((resolve) => setTimeout(resolve, attempt * 2000));
+  let response;
+  try {
+    response = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json' } });
+  } catch (err) {
+    if (attempt <= 4) {
+      await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+      return getJson(url, attempt + 1);
+    }
+    throw err;
+  }
+
+  if ((response.status === 429 || response.status >= 500) && attempt <= 4) {
+    await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
     return getJson(url, attempt + 1);
   }
   if (!response.ok) {
-    throw new Error(`${url} → HTTP ${response.status}: ${(await response.text()).slice(0, 150)}`);
+    throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 120).replace(/\s+/g, ' ')}`);
   }
   return response.json();
 }
@@ -89,30 +103,41 @@ async function loadKnownSets() {
   const byName = new Map();
   let cards = 0;
 
+  // Ein einzelnes Set, das nicht antwortet, darf nicht den ganzen Lauf kippen –
+  // die übrigen Editionen lassen sich trotzdem zuordnen.
+  const failed = [];
   for (const set of sets) {
-    let page = 1;
-    for (;;) {
-      const query = new URLSearchParams({
-        q: `set.id:${set.id}`,
-        pageSize: '250',
-        page: String(page),
-        select: 'id,name,number,rarity,set',
-      });
-      const body = await getJson(`${API}/cards?${query}`);
-      const list = body.data ?? [];
-      for (const card of list) {
-        const key = normalizeName(card.name);
-        const entry = { setId: set.id, number: card.number, rarity: card.rarity };
-        const existing = byName.get(key);
-        if (existing) existing.push(entry);
-        else byName.set(key, [entry]);
-        cards++;
+    try {
+      let page = 1;
+      for (;;) {
+        const query = new URLSearchParams({
+          q: `set.id:${set.id}`,
+          pageSize: '250',
+          page: String(page),
+        });
+        const body = await getJson(`${API}/cards?${query}`);
+        const list = body.data ?? [];
+        for (const card of list) {
+          const key = normalizeName(card.name);
+          const entry = { setId: set.id, number: card.number, rarity: card.rarity };
+          const existing = byName.get(key);
+          if (existing) existing.push(entry);
+          else byName.set(key, [entry]);
+          cards++;
+        }
+        if (list.length < 250) break;
+        page++;
       }
-      if (list.length < 250) break;
-      page++;
+    } catch (err) {
+      failed.push(`${set.id} (${err.message})`);
     }
   }
-  console.log(`· pokemontcg.io: ${cards.toLocaleString('de-CH')} Karten geladen`);
+
+  console.log(`· pokemontcg.io: ${cards.toLocaleString('de-CH')} Karten aus ${sets.length - failed.length} Sets geladen`);
+  if (failed.length) {
+    console.warn(`· ${failed.length} Sets nicht abrufbar, die ersten drei: ${failed.slice(0, 3).join(' | ')}`);
+  }
+  if (cards === 0) throw new Error('Kein einziges Set abrufbar – Zuordnung nicht möglich.');
   return { setsById, byName };
 }
 
