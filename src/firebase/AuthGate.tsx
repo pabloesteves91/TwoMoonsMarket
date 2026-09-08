@@ -11,10 +11,13 @@ import { authErrorMessage, getDb, getFirebaseAuth } from './config';
 import { WORKSPACE_ID } from './env';
 import { AuthContext, type AuthValue, type Member } from './authContext';
 
+/** Warum der Zugriff fehlt – die beiden Fälle brauchen unterschiedliche Hinweise. */
+type NoAccessReason = 'notMember' | 'rulesDenied';
+
 type State =
   | { status: 'loading' }
   | { status: 'signedOut' }
-  | { status: 'noAccess'; user: User }
+  | { status: 'noAccess'; user: User; reason: NoAccessReason }
   | { status: 'ready'; user: User; member: Member };
 
 /**
@@ -29,10 +32,12 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     try {
       const snapshot = await getDoc(doc(getDb(), 'workspaces', WORKSPACE_ID, 'members', user.uid));
       if (snapshot.exists()) setState({ status: 'ready', user, member: snapshot.data() as Member });
-      else setState({ status: 'noAccess', user });
-    } catch {
-      // Die Security Rules verweigern den Zugriff, wenn kein Mitglieds-Dokument existiert
-      setState({ status: 'noAccess', user });
+      else setState({ status: 'noAccess', user, reason: 'notMember' });
+    } catch (err) {
+      // "permission-denied" heisst: die Security Rules aus firestore.rules sind noch
+      // nicht veröffentlicht. Ohne sie greifen die Standardregeln, die alles sperren.
+      const denied = (err as { code?: string }).code === 'permission-denied';
+      setState({ status: 'noAccess', user, reason: denied ? 'rulesDenied' : 'notMember' });
     }
   }, []);
 
@@ -65,7 +70,8 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (state.status === 'signedOut') return <LoginScreen />;
-  if (state.status === 'noAccess') return <NoAccessScreen user={state.user} onSignOut={value.signOut} />;
+  if (state.status === 'noAccess')
+    return <NoAccessScreen user={state.user} reason={state.reason} onSignOut={value.signOut} />;
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -157,7 +163,15 @@ function LoginScreen() {
   );
 }
 
-function NoAccessScreen({ user, onSignOut }: { user: User; onSignOut: () => Promise<void> }) {
+function NoAccessScreen({
+  user,
+  reason,
+  onSignOut,
+}: {
+  user: User;
+  reason: NoAccessReason;
+  onSignOut: () => Promise<void>;
+}) {
   const [copied, setCopied] = useState(false);
 
   return (
@@ -170,12 +184,23 @@ function NoAccessScreen({ user, onSignOut }: { user: User; onSignOut: () => Prom
             <div className="brand__sub">TCG Collector</div>
           </div>
         </div>
-        <h1 style={{ fontSize: 19 }}>Noch nicht freigeschaltet</h1>
-        <p className="muted small" style={{ margin: 0 }}>
-          Die Anmeldung hat geklappt, dieses Konto ist aber noch nicht für den Arbeitsbereich{' '}
-          <span className="mono">{WORKSPACE_ID}</span> freigegeben. Bitte die folgende Benutzer-ID an die
-          Administration weitergeben.
-        </p>
+        <h1 style={{ fontSize: 19 }}>
+          {reason === 'rulesDenied' ? 'Zugriff gesperrt' : 'Noch nicht freigeschaltet'}
+        </h1>
+        {reason === 'rulesDenied' ? (
+          <p className="muted small" style={{ margin: 0 }}>
+            Die Anmeldung hat geklappt, aber die Datenbank weist den Zugriff ab. Das passiert, solange die
+            Sicherheitsregeln aus <span className="mono">firestore.rules</span> nicht veröffentlicht sind –
+            in der Firebase-Konsole unter <em>Firestore Database → Regeln</em>. Bitte an die Administration
+            weitergeben.
+          </p>
+        ) : (
+          <p className="muted small" style={{ margin: 0 }}>
+            Die Anmeldung hat geklappt, dieses Konto ist aber noch nicht für den Arbeitsbereich{' '}
+            <span className="mono">{WORKSPACE_ID}</span> freigegeben. Bitte die folgende Benutzer-ID an die
+            Administration weitergeben.
+          </p>
+        )}
         <dl className="kv">
           <dt>E-Mail</dt>
           <dd>{user.email}</dd>
