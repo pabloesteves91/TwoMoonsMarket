@@ -99,21 +99,51 @@ npm run deploy               # App veröffentlichen
 
 ## Preise automatisch aktualisieren
 
-Der Workflow `Deploy` läuft täglich um 05:15 UTC, lädt die Cardmarket-Preislisten
-über `scripts/import-prices.mjs` und veröffentlicht sie zusammen mit der App unter
-`/prices/`. In der App erscheint dann unter *Preise* der Knopf
-**„Preise jetzt aktualisieren"** – ein Tipp, und die Preise landen in der lokalen
-Datenbank des Geräts. Kein Datei-Download, kein Rechner.
+Der Workflow `Deploy` läuft täglich um 05:15 UTC und
+
+1. lädt Preisliste **und** Produktkatalog je Spiel von Cardmarket
+   (`scripts/import-prices.mjs --index --catalog`),
+2. führt beide zusammen und dampft sie auf die Felder ein, die die App auswertet
+   (`scripts/build-price-bundle.mjs`) – aus über 100 MB Rohdaten werden so wenige
+   MB, die Firebase Hosting zusätzlich komprimiert ausliefert,
+3. veröffentlicht das Ergebnis unter `/prices/` neben der App.
+
+In der App erscheint dann unter *Preise* der Knopf **„Preise jetzt aktualisieren"**
+– ein Tipp, und die Preise landen in der lokalen Datenbank des Geräts.
 
 Wichtig zum Verständnis:
 
-* Der Abruf bei Cardmarket ist **nicht garantiert** – es gibt keine offizielle
-  API. Schlägt er fehl, bricht der Deploy nicht ab: die zuletzt veröffentlichten
-  Preisdateien bleiben stehen, und im Actions-Protokoll steht der Grund. Dann
-  hilft weiterhin der manuelle Upload unter *Preise*.
 * Der Knopf muss **pro Gerät** einmal getippt werden, weil die Preislisten lokal
   liegen (siehe Tabelle oben). Der Bestand dagegen ist sofort überall gleich.
+* Schlägt der Abruf bei Cardmarket fehl, bricht der Deploy nicht ab: die zuletzt
+  veröffentlichten Preisdateien bleiben stehen, und im Actions-Protokoll steht der
+  Grund. Der manuelle Upload unter *Preise* funktioniert weiterhin.
 * Nutzungsbedingungen von Cardmarket für automatisierte Abrufe bitte prüfen.
+
+## Wenn etwas klemmt
+
+**„Security Rules konnten nicht veröffentlicht werden" im Actions-Protokoll,
+Fehler 403 auf `serviceusage.googleapis.com`**
+
+Dem Dienstkonto aus dem GitHub-Secret fehlt eine Berechtigung. Zwei Wege:
+
+* *Schnell, ohne Berechtigung:* Firebase-Konsole → *Firestore Database → Regeln*
+  → den Inhalt von `firestore.rules` einfügen → **Veröffentlichen**. Die Regeln
+  ändern sich selten, das reicht auf Dauer.
+* *Dauerhaft für den Workflow:* Google-Cloud-Konsole → *IAM & Verwaltung → IAM* →
+  beim Konto `firebase-adminsdk-…@twomoonsmarket-c7649.iam.gserviceaccount.com`
+  auf *Bearbeiten* → Rolle **Service Usage Consumer** hinzufügen (bei Bedarf auch
+  *Firebase Rules Admin*). Danach veröffentlicht der Workflow die Regeln selbst.
+
+Bis die Regeln veröffentlicht sind, gelten die Standardregeln aus dem
+Produktionsmodus – die verbieten jeden Zugriff, und die App zeigt nach dem
+Anmelden dauerhaft „Noch nicht freigeschaltet".
+
+**Nach dem Anmelden kommt „Noch nicht freigeschaltet", obwohl der Eintrag da ist**
+
+Pfad und Schreibweise prüfen: `workspaces/twomoons/members/<UID>`. Die Dokument-ID
+muss exakt die Nutzer-UID sein (keine Auto-ID), und der Arbeitsbereich muss
+`twomoons` heissen bzw. zu `VITE_WORKSPACE_ID` passen.
 
 ## Bestehende Daten übernehmen
 

@@ -113,7 +113,8 @@ Cardmarket bietet keine offene API, die Preisliste kommt deshalb als Datei in di
 
 ### Variante A – vollautomatisch (empfohlen)
 
-Der GitHub-Actions-Workflow `Deploy` läuft täglich, lädt die Preislisten und
+Der GitHub-Actions-Workflow `Deploy` läuft täglich, lädt Preisliste und
+Produktkatalog, führt beide zu einer schlanken Datei je Spiel zusammen und
 veröffentlicht sie zusammen mit der App unter `/prices/`. In der App erscheint
 dann unter **Preise** der Knopf **„Preise jetzt aktualisieren"** – ein Tipp
 genügt, auch auf dem Handy. Kein Datei-Download, kein Rechner.
@@ -203,6 +204,7 @@ firestore.rules             Security Rules (Zugriff nur für freigeschaltete Mit
 .github/workflows/          Build, Preisabruf und Deploy über GitHub Actions
 public/                     App-Icons und Web-App-Manifest
 scripts/import-prices.mjs   Download der Cardmarket-Preislisten
+scripts/build-price-bundle.mjs  Katalog + Preisliste zu einer schlanken Datei verdichten
 src/lib/pricing.ts          Preisregeln, Matching, Rundung
 src/lib/cardmarket.ts       Import-Parser (JSON/CSV, Spaltenerkennung)
 src/lib/cloudPrices.ts      Preisabruf aus dem Web (/prices/index.json)

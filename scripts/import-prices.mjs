@@ -134,14 +134,16 @@ async function main() {
 
   if (failures > 0) {
     console.error(
-      '\nMindestens ein Download ist fehlgeschlagen. Falls Cardmarket den direkten Abruf sperrt:\n' +
+      `\n${failures} Download(s) fehlgeschlagen. Falls Cardmarket den direkten Abruf sperrt:\n` +
         '  1. https://www.cardmarket.com/en/Magic/Data/Price-Guide im Browser öffnen\n' +
         '  2. Preisliste herunterladen\n' +
         '  3. Datei in der App unter "Preise" hochladen\n',
     );
-    exit(1);
+    // Mit --index zählt ein Teilerfolg als Erfolg: die geladenen Dateien sollen
+    // veröffentlicht werden, statt dass der Deploy sie wegen einer fehlenden verwirft.
+    if (!index || manifest.files.length === 0) exit(1);
   }
-  console.log(`\nFertig. Dateien liegen in ${out}.`);
+  console.log(`\nFertig. ${manifest.files.length || 'Alle'} Datei(en) liegen in ${out}.`);
 }
 
 main().catch((err) => {

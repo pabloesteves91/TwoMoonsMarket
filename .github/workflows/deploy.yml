@@ -40,11 +40,16 @@ jobs:
       - name: Typen prüfen und bauen
         run: npm run build
 
-      - name: Cardmarket-Preise holen
+      # Katalog (Kartennamen) und Preisliste werden hier zusammengeführt und auf
+      # die Felder eingedampft, die die App auswertet – aus über 100 MB Rohdaten
+      # werden so wenige MB, die auch über Mobilfunk zumutbar sind.
+      - name: Cardmarket-Preise holen und verdichten
         id: prices
         if: inputs.skip_prices != true
         continue-on-error: true
-        run: node scripts/import-prices.mjs --out dist/prices --index
+        run: |
+          node scripts/import-prices.mjs --out dist/prices --index --catalog
+          node scripts/build-price-bundle.mjs dist/prices
 
       # Schlägt der Abruf fehl (Cardmarket nicht erreichbar oder Format geändert),
       # werden die zuletzt veröffentlichten Preisdateien übernommen, damit der
@@ -91,7 +96,7 @@ jobs:
         continue-on-error: true
         run: |
           if ! npx --yes firebase-tools@latest deploy --only firestore:rules --project "$FIREBASE_PROJECT" --non-interactive; then
-            echo "::warning::Security Rules konnten nicht veröffentlicht werden. Ist die Firestore-Datenbank in der Firebase-Konsole schon angelegt?"
+            echo "::warning::Security Rules konnten nicht veröffentlicht werden. Häufigste Ursache: dem Dienstkonto fehlt die Rolle 'Service Usage Consumer' (Fehler 403 auf serviceusage.googleapis.com). Bis dahin lassen sich die Regeln aus firestore.rules direkt in der Firebase-Konsole unter Firestore Database → Regeln einfügen."
             exit 1
           fi
 
