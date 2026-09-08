@@ -28,6 +28,45 @@ npm run preview
 Vercel, GitHub Pages oder jedem Webserver. Die App nutzt Hash-Routing, es sind
 also keine Server-Rewrites nötig.
 
+## Auf dem Handy nutzen
+
+### Schnell: im gleichen WLAN
+
+`npm run dev` gibt neben der lokalen auch eine `Network:`-Adresse aus
+(z.B. `http://192.168.1.42:5173/`). Diese am Handy im selben WLAN öffnen – kein
+Deploy nötig, solange der Rechner läuft. Dasselbe funktioniert mit
+`npm run preview` für den Produktions-Build.
+
+### Dauerhaft: Firebase Hosting
+
+Voraussetzung ist ein Firebase-Projekt (console.firebase.google.com). Danach im
+Projektordner:
+
+```bash
+npx firebase-tools login          # einmalig, öffnet den Browser
+npx firebase-tools use --add      # Firebase-Projekt auswählen, Alias z.B. "default"
+npm run deploy                    # baut und veröffentlicht dist/
+```
+
+`npm run deploy` gibt die Hosting-URL aus (`https://<projekt-id>.web.app`) – die
+lässt sich auf jedem Handy öffnen. Für jedes weitere Update genügt erneut
+`npm run deploy`. Die Hosting-Konfiguration steht in `firebase.json`; eine eigene
+Domain lässt sich in der Firebase-Konsole unter *Hosting → Custom domain*
+verbinden.
+
+Wird später auch Firestore/Auth aktiviert (siehe unten), bleibt es dasselbe
+Firebase-Projekt – Hosting und Datenbank liegen dann beieinander.
+
+### Als App auf dem Homescreen
+
+Die Seite bringt ein Web-App-Manifest und Icons mit. Über *Teilen → Zum
+Home-Bildschirm* (iOS) bzw. *Menü → App installieren* (Android) startet sie ohne
+Browser-Leiste im Vollbild.
+
+**Wichtig:** Die Daten liegen in der IndexedDB des jeweiligen Geräts. Handy und
+Büro-Rechner haben also getrennte Bestände, bis auf Firebase umgestellt wird.
+Zum Übertragen dient *Einstellungen → Backup exportieren* / *einlesen*.
+
 ## Funktionen
 
 | Bereich | Inhalt |
@@ -128,6 +167,8 @@ Firestore-Struktur stehen in [`src/firebase/README.md`](src/firebase/README.md).
 ## Projektstruktur
 
 ```
+firebase.json               Hosting-Konfiguration (statisches dist/)
+public/                     App-Icons und Web-App-Manifest
 scripts/import-prices.mjs   Download der Cardmarket-Preislisten
 src/lib/pricing.ts          Preisregeln, Matching, Rundung
 src/lib/cardmarket.ts       Import-Parser (JSON/CSV, Spaltenerkennung)

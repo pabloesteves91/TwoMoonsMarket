@@ -7,9 +7,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview",
+    "preview": "vite preview --host",
     "typecheck": "tsc -b --noEmit false --emitDeclarationOnly false",
-    "import:prices": "node scripts/import-prices.mjs"
+    "import:prices": "node scripts/import-prices.mjs",
+    "deploy": "npm run build && npx --yes firebase-tools@latest deploy --only hosting"
   },
   "dependencies": {
     "dexie": "^4.0.11",

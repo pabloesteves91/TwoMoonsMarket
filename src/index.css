@@ -793,3 +793,12 @@ tbody tr:hover {
     display: grid;
   }
 }
+
+/* iOS Safari zoomt beim Fokussieren von Feldern mit Schrift < 16 px hinein. */
+@media (max-width: 860px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

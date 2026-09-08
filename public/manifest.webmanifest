@@ -1,0 +1,17 @@
+{
+  "name": "TwoMoons Market",
+  "short_name": "TwoMoons",
+  "description": "TCG Collector & Preis-Tracker für TwoMoons AG, Dübendorf",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0c0d18",
+  "theme_color": "#0c0d18",
+  "lang": "de-CH",
+  "icons": [
+    { "src": "icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512" }
+  ]
+}
