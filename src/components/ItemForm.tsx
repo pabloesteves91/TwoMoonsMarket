@@ -498,7 +498,10 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
             {settings.applyConditionFactors ? (
               <>
                 <dt>Zustandsfaktor {draft.condition}</dt>
-                <dd>×{preview.conditionFactor.toFixed(2)}</dd>
+                <dd>
+                  ×{preview.conditionFactor.toFixed(2)}
+                  <span className="dim small"> ({settings.conditionFactors[draft.condition]} %)</span>
+                </dd>
               </>
             ) : null}
             <dt>Verkaufspreis pro Stück</dt>
@@ -509,6 +512,20 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
             <dd>{formatMoney(preview.sellPrice * draft.quantity, settings)}</dd>
           </dl>
         )}
+
+        {/* Cardmarket-Preise beziehen sich auf Near-Mint-Ware. Ohne Zustands-
+            faktoren bekommt eine gespielte Karte denselben Preis wie eine
+            makellose – darauf sollte die App hinweisen, statt es zu verschweigen. */}
+        {!settings.applyConditionFactors && draft.condition !== 'NM' && draft.condition !== 'MT' ? (
+          <p className="notice notice--warn" style={{ marginTop: 10, marginBottom: 0 }}>
+            Der Zustand <strong>{draft.condition}</strong> wird derzeit nicht eingerechnet – die
+            Cardmarket-Preise gelten für Near Mint. Einschalten unter{' '}
+            <Link to="/regeln" onClick={onClose}>
+              Regeln → Zustandsfaktoren
+            </Link>{' '}
+            (Vorschlag: EX 85 %, GD 70 %, LP 60 %, PL 45 %, PO 30 %).
+          </p>
+        ) : null}
       </div>
     </Modal>
   );
