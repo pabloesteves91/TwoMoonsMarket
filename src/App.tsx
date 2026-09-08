@@ -2,6 +2,7 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
 import Prices from './pages/Prices';
+import Approvals from './pages/Approvals';
 import Rules from './pages/Rules';
 import SettingsPage from './pages/Settings';
 import { useStore } from './store';
@@ -12,17 +13,20 @@ const NAV = [
   { to: '/', label: 'Dashboard', icon: '◑', end: true },
   { to: '/bestand', label: 'Bestand', icon: '▦', end: false },
   { to: '/preise', label: 'Preise', icon: '€', end: false },
+  { to: '/freigabe', label: 'Freigabe', icon: '✓', end: false },
   { to: '/regeln', label: 'Regeln', icon: '%', end: false },
   { to: '/einstellungen', label: 'Einstellungen', icon: '⚙', end: false },
 ];
 
 export default function App() {
-  const { items, priceStats, settings } = useStore();
+  const { items, priceStats, settings, pricedItems } = useStore();
   const { user, signOut } = useAuth();
   const priceCount = priceStats.reduce((sum, s) => sum + s.count, 0);
+  const pending = pricedItems.filter((row) => row.needsApproval).length;
   const badges: Record<string, string> = {
     '/bestand': formatNumber(items.reduce((sum, i) => sum + i.quantity, 0)),
     '/preise': formatNumber(priceCount),
+    ...(pending > 0 ? { '/freigabe': formatNumber(pending) } : {}),
   };
 
   return (
@@ -85,6 +89,7 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/bestand" element={<Inventory />} />
           <Route path="/preise" element={<Prices />} />
+          <Route path="/freigabe" element={<Approvals />} />
           <Route path="/regeln" element={<Rules />} />
           <Route path="/einstellungen" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

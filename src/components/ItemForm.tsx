@@ -22,6 +22,18 @@ interface ItemFormProps {
   onClose: () => void;
 }
 
+/** Felder, die beim Erfassen einer Serie gleich bleiben. */
+function carryOver(item: InventoryItem): Partial<InventoryItem> {
+  return {
+    gameId: item.gameId,
+    set: item.set,
+    condition: item.condition,
+    language: item.language,
+    foil: item.foil,
+    location: item.location,
+  };
+}
+
 function emptyItem(gameId: string): InventoryItem {
   return {
     id: uid('item_'),
@@ -45,7 +57,11 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
   const [useOverride, setUseOverride] = useState(Boolean(item?.ruleOverride));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  /** Zähler und Rückmeldung für die Serienerfassung */
+  const [savedCount, setSavedCount] = useState(0);
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
   const searchTimer = useRef<number>();
+  const nameRef = useRef<HTMLInputElement>(null);
 
   const patch = (changes: Partial<InventoryItem>) => setDraft((prev) => ({ ...prev, ...changes }));
 
@@ -95,7 +111,12 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
     setShowSuggestions(false);
   }
 
-  async function handleSave() {
+  /**
+   * Speichert den Eintrag. `andNext` hält die Maske für die nächste Karte offen
+   * und behält Spiel, Set, Zustand, Sprache, Foil und Lagerort bei – beim
+   * Erfassen einer Kiste ändert sich meist nur der Name.
+   */
+  async function handleSave(andNext = false) {
     if (!draft.name.trim()) {
       setError('Bitte einen Kartennamen eingeben.');
       return;
@@ -106,14 +127,32 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
     }
     setSaving(true);
     try {
+      const name = draft.name.trim();
       await saveItem({
         ...draft,
-        name: draft.name.trim(),
+        name,
         set: draft.set?.trim() || undefined,
         ruleOverride: useOverride ? draft.ruleOverride ?? {} : undefined,
+        // Neu erfasste Karten bekommen ein Kärtchen mit dem aktuellen Preis –
+        // sie sollen nicht sofort in der Preisfreigabe auftauchen.
+        approvedPrice: draft.approvedPrice ?? preview.sellPrice ?? undefined,
+        approvedAt: draft.approvedPrice ? draft.approvedAt : preview.sellPrice ? Date.now() : undefined,
         updatedAt: Date.now(),
       });
-      onClose();
+
+      if (!andNext) {
+        onClose();
+        return;
+      }
+
+      setSavedCount((count) => count + 1);
+      setLastSaved(name);
+      setError(null);
+      setDraft({ ...emptyItem(draft.gameId), ...carryOver(draft), id: uid('item_') });
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setSaving(false);
+      nameRef.current?.focus();
     } catch (err) {
       setError((err as Error).message);
       setSaving(false);
@@ -122,7 +161,13 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
 
   return (
     <Modal
-      title={item ? 'Eintrag bearbeiten' : 'Karte zum Bestand hinzufügen'}
+      title={
+        item
+          ? 'Eintrag bearbeiten'
+          : savedCount > 0
+            ? `Karte erfassen (${savedCount} gespeichert)`
+            : 'Karte zum Bestand hinzufügen'
+      }
       onClose={onClose}
       footer={
         <>
@@ -139,8 +184,19 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
           ) : null}
           <div className="spacer" />
           <button type="button" className="btn" onClick={onClose}>
-            Abbrechen
+            {savedCount > 0 ? 'Fertig' : 'Abbrechen'}
           </button>
+          {!item ? (
+            <button
+              type="button"
+              className="btn"
+              disabled={saving}
+              onClick={() => void handleSave(true)}
+              title="Speichern und gleich die nächste Karte erfassen"
+            >
+              + Nächste
+            </button>
+          ) : null}
           <button type="button" className="btn btn--primary" disabled={saving} onClick={() => void handleSave()}>
             {saving ? 'Speichert …' : 'Speichern'}
           </button>
@@ -148,6 +204,11 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
       }
     >
       {error ? <p className="notice notice--error">{error}</p> : null}
+      {lastSaved && !error ? (
+        <p className="notice notice--ok">
+          „{lastSaved}" gespeichert. Set, Zustand, Sprache und Lagerort bleiben für die nächste Karte stehen.
+        </p>
+      ) : null}
 
       <div className="field-row">
         <div>
@@ -176,6 +237,8 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
         <label htmlFor="name">Kartenname</label>
         <input
           id="name"
+          ref={nameRef}
+          autoFocus
           value={draft.name}
           autoComplete="off"
           placeholder="z.B. Lightning Bolt"

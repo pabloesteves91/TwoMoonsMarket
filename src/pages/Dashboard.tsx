@@ -13,6 +13,7 @@ export default function Dashboard() {
   const sellOfPriced = withCost.reduce((sum, row) => sum + (row.totalSell ?? 0), 0);
   const marginPercent = costOfPriced > 0 ? ((sellOfPriced - costOfPriced) / costOfPriced) * 100 : null;
   const unpriced = pricedItems.filter((row) => row.calc.sellPrice === null);
+  const pending = pricedItems.filter((row) => row.needsApproval);
   const lastImport = priceStats.reduce<number | null>(
     (latest, stat) => (stat.updatedAt && (!latest || stat.updatedAt > latest) ? stat.updatedAt : latest),
     null,
@@ -79,6 +80,13 @@ export default function Dashboard() {
           <div className="stat__hint">Stand: {formatDate(lastImport)}</div>
         </div>
       </div>
+
+      {pending.length > 0 ? (
+        <p className="notice notice--ok" style={{ marginTop: 16 }}>
+          Bei {formatNumber(pending.length)} Karten weicht der berechnete Preis vom Preis am Kärtchen ab.{' '}
+          <Link to="/freigabe">Zur Preisfreigabe</Link>
+        </p>
+      ) : null}
 
       {unpriced.length > 0 ? (
         <p className="notice notice--warn" style={{ marginTop: 16 }}>

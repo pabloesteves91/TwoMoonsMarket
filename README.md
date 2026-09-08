@@ -71,10 +71,34 @@ angemeldeten Geräte denselben Bestand.
 | Bereich | Inhalt |
 | --- | --- |
 | **Dashboard** | Kartenanzahl, Verkaufswert, Einkaufswert, Marge, wertvollste Positionen, Stand der Preisliste |
-| **Bestand** | Zustand (MT–PO), Sprache, Foil, Menge, Lagerort, Einkaufspreis, Fixpreis, Notiz, Foto; Suche, Filter, Sortierung; CSV-Export |
+| **Bestand** | Zustand (MT–PO), Sprache, Foil, Menge, Lagerort, Einkaufspreis, Fixpreis, Notiz, Foto; Serienerfassung, Suche, Filter, Sortierung; CSV-Export |
+| **Freigabe** | Vergleich Kärtchenpreis ↔ berechneter Preis, Änderungen einzeln bestätigen, Liste zum Umetikettieren als CSV |
 | **Preise** | Preisabruf mit einem Tipp, Import per Drag & Drop (JSON/CSV), Suche in der Preisliste mit berechnetem Verkaufspreis |
 | **Regeln** | Getrennte Preisregeln für Foil und Non-Foil, Sonderregeln pro Set und pro Karte, optionale Zustandsfaktoren |
 | **Einstellungen** | Währung EUR/CHF, Spiele verwalten, Backup exportieren/einlesen, Demo-Daten, Zurücksetzen |
+
+### Preise am Kärtchen: Freigabe statt Automatik
+
+Im Laden steht der Preis auf dem Kärtchen und ändert sich erst, wenn ihn jemand
+neu schreibt. Die App bildet das ab: jeder Bestandseintrag merkt sich den
+**zuletzt freigegebenen Preis**, und unter *Freigabe* stehen nur die Karten, bei
+denen der berechnete Preis inzwischen abweicht – mit alt → neu, Differenz in
+Prozent und einer CSV-Liste zum Mitnehmen an die Vitrine. Erst das Bestätigen
+setzt den neuen Kärtchenpreis.
+
+Damit nicht jede Kleinigkeit auf der Liste landet, müssen **beide** Schwellen aus
+den Einstellungen erreicht sein (Standard 0.20 EUR **und** 5 %): ein paar Rappen
+auf einer teuren Karte sind ebenso wenig ein Grund zum Umetikettieren wie ein
+Prozentsprung auf einer Zehn-Rappen-Karte.
+
+Frisch erfasste Karten bekommen den aktuell berechneten Preis gleich als
+Kärtchenpreis – sie landen also nicht sofort auf der Freigabeliste.
+
+### Grössere Mengen erfassen
+
+Im Erfassungsdialog speichert **„+ Nächste"** und hält die Maske offen: Spiel,
+Set, Zustand, Sprache, Foil und Lagerort bleiben stehen, der Name ist leer und
+fokussiert. Beim Durcharbeiten einer Kiste ändert sich meist nur der Name.
 
 ### Preisberechnung
 

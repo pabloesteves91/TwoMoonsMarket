@@ -827,3 +827,44 @@ tbody tr:hover {
   gap: 11px;
   margin-bottom: 4px;
 }
+
+/* ---------- Preisfreigabe ---------- */
+
+.approval {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  cursor: pointer;
+  color: var(--text);
+  font-size: inherit;
+}
+.approval:hover .approval__card {
+  color: var(--text);
+}
+.approval__price {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  align-items: baseline;
+  gap: 6px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.approval__price strong {
+  font-size: 16px;
+}
+.approval__arrow {
+  color: var(--text-dim);
+}
+@media (max-width: 560px) {
+  .approval {
+    grid-template-columns: auto 1fr;
+    row-gap: 8px;
+  }
+  .approval__price {
+    grid-column: 2;
+    justify-content: end;
+  }
+}

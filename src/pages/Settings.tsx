@@ -120,6 +120,36 @@ export default function SettingsPage() {
             <p className="small dim" style={{ margin: 0 }}>
               Preise werden intern immer in EUR gespeichert (Cardmarket-Basis). Der Kurs wird manuell gepflegt.
             </p>
+
+            <div className="field-row">
+              <div>
+                <label htmlFor="min-delta">Freigabe ab … EUR Abweichung</label>
+                <input
+                  id="min-delta"
+                  type="number"
+                  step="0.05"
+                  min={0}
+                  value={draft.approvalMinDelta}
+                  onChange={(e) => setDraft({ ...draft, approvalMinDelta: Number(e.target.value) })}
+                />
+              </div>
+              <div>
+                <label htmlFor="min-percent">… und ab … % Abweichung</label>
+                <input
+                  id="min-percent"
+                  type="number"
+                  step="1"
+                  min={0}
+                  value={draft.approvalMinPercent}
+                  onChange={(e) => setDraft({ ...draft, approvalMinPercent: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+            <p className="small dim" style={{ margin: 0 }}>
+              Beide Grenzen müssen erreicht sein, damit eine Karte in der Preisfreigabe erscheint. So schlägt
+              weder ein paar Rappen auf einer teuren Karte noch ein Prozentsprung auf einer Zehn-Rappen-Karte
+              unnötig Alarm.
+            </p>
           </div>
         </div>
 

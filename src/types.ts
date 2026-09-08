@@ -183,6 +183,10 @@ export interface Settings {
   /** Manuell gepflegter Kurs 1 EUR = x CHF */
   eurToChf: number;
   companyName: string;
+  /** Ab welcher Abweichung eine Karte zur Freigabe vorgeschlagen wird (EUR) */
+  approvalMinDelta: number;
+  /** …und ab welcher prozentualen Abweichung. Beide Grenzen müssen erreicht sein. */
+  approvalMinPercent: number;
   /** Zuletzt genutzte Spielauswahl in der Bestandsansicht */
   lastGameFilter?: string;
 }
@@ -202,6 +206,13 @@ export interface InventoryItem {
   purchasePrice?: number;
   /** Fixpreis pro Stück in EUR – überschreibt jede Regel */
   fixedPrice?: number;
+  /**
+   * Zuletzt freigegebener Verkaufspreis pro Stück in EUR – also der Preis, der
+   * am Kärtchen im Laden steht. Der berechnete Preis ändert sich mit jedem
+   * Cardmarket-Import; dieser hier erst, wenn jemand die Änderung übernimmt.
+   */
+  approvedPrice?: number;
+  approvedAt?: number;
   /** Regel-Überschreibung nur für diesen Eintrag */
   ruleOverride?: PricingRuleOverride;
   /** Verknüpfung zu einem Preis-Datensatz (`PriceEntry.id`) */

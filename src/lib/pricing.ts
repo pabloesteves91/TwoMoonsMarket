@@ -284,4 +284,6 @@ export const DEFAULT_SETTINGS: Settings = {
   currency: 'EUR',
   eurToChf: 0.95,
   companyName: 'TwoMoons AG, Dübendorf',
+  approvalMinDelta: 0.2,
+  approvalMinPercent: 5,
 };

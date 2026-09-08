@@ -259,6 +259,14 @@ export default function Inventory() {
                               kein Preis
                             </span>
                           ) : null}
+                          {row.needsApproval && !row.neverApproved ? (
+                            <span
+                              className="badge badge--warn"
+                              title={`Kärtchen: ${row.approvedPrice?.toFixed(2)} EUR – berechnet: ${row.calc.sellPrice?.toFixed(2)} EUR`}
+                            >
+                              Preis geändert
+                            </span>
+                          ) : null}
                           {row.calc.ruleSource !== 'global' ? (
                             <span className="badge" title="Abweichende Preisregel">
                               {row.calc.ruleSource === 'fixed' ? 'Fixpreis' : 'Sonderregel'}

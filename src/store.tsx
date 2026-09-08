@@ -31,6 +31,15 @@ export interface PricedItem {
   /** Marge pro Stück in EUR */
   margin: number | null;
   marginPercent: number | null;
+  /** Preis, der am Kärtchen steht (zuletzt freigegeben) */
+  approvedPrice: number | null;
+  /** Differenz berechneter Preis minus Kärtchenpreis, pro Stück in EUR */
+  priceDelta: number | null;
+  priceDeltaPercent: number | null;
+  /** Karte ist noch nie ausgezeichnet worden */
+  neverApproved: boolean;
+  /** Abweichung ist gross genug, um ein Umetikettieren vorzuschlagen */
+  needsApproval: boolean;
 }
 
 interface StoreValue {
@@ -50,6 +59,8 @@ interface StoreValue {
   deleteOverride: (id: string) => Promise<void>;
   saveGame: (game: Game) => Promise<void>;
   deleteGame: (id: string) => Promise<void>;
+  /** Übernimmt die berechneten Preise als neuen Kärtchenpreis. */
+  approvePrices: (itemIds: string[]) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -99,7 +110,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : calc.sellPrice - item.purchasePrice;
       const marginPercent =
         margin === null || !item.purchasePrice ? null : (margin / item.purchasePrice) * 100;
-      return { item, entry, calc, totalSell, totalCost, margin, marginPercent };
+
+      const approvedPrice = item.approvedPrice ?? null;
+      const neverApproved = approvedPrice === null && calc.sellPrice !== null;
+      const priceDelta =
+        calc.sellPrice === null || approvedPrice === null ? null : calc.sellPrice - approvedPrice;
+      const priceDeltaPercent =
+        priceDelta === null || !approvedPrice ? null : (priceDelta / approvedPrice) * 100;
+      // Beide Grenzen müssen überschritten sein: ein paar Rappen auf einer teuren
+      // Karte sind ebenso wenig ein Grund zum Umetikettieren wie 20 % auf 10 Rappen.
+      const needsApproval =
+        neverApproved ||
+        (priceDelta !== null &&
+          priceDeltaPercent !== null &&
+          Math.abs(priceDelta) >= settings.approvalMinDelta &&
+          Math.abs(priceDeltaPercent) >= settings.approvalMinPercent);
+
+      return {
+        item,
+        entry,
+        calc,
+        totalSell,
+        totalCost,
+        margin,
+        marginPercent,
+        approvedPrice,
+        priceDelta,
+        priceDeltaPercent,
+        neverApproved,
+        needsApproval,
+      };
     });
   }, [items, entries, overrides, settings]);
 
@@ -141,6 +181,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       deleteGame: async (id) => {
         await repo.deleteGame(id);
+        await refresh();
+      },
+      approvePrices: async (itemIds) => {
+        const wanted = new Set(itemIds);
+        const now = Date.now();
+        for (const row of pricedItems) {
+          if (!wanted.has(row.item.id) || row.calc.sellPrice === null) continue;
+          await repo.saveItem({
+            ...row.item,
+            approvedPrice: row.calc.sellPrice,
+            approvedAt: now,
+            updatedAt: now,
+          });
+        }
         await refresh();
       },
     };
