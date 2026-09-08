@@ -1,0 +1,43 @@
+rules_version = '2';
+
+// Zugriff auf den Arbeitsbereich hat nur, wer in
+// workspaces/{ws}/members/{uid} eingetragen ist. Ein Konto allein genügt nicht –
+// bei aktivierter E-Mail-Anmeldung könnte sich sonst jede beliebige Person
+// registrieren und mitlesen.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /workspaces/{ws} {
+
+      function isMember() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/workspaces/$(ws)/members/$(request.auth.uid));
+      }
+
+      function isAdmin() {
+        return isMember()
+          && get(/databases/$(database)/documents/workspaces/$(ws)/members/$(request.auth.uid)).data.role == 'admin';
+      }
+
+      // Das Arbeitsbereichs-Dokument selbst wird nicht benötigt.
+      allow read, write: if false;
+
+      // Mitgliederliste: alle Mitglieder dürfen lesen, ändern nur die Administration.
+      // Neue Mitglieder werden in der Firebase-Konsole angelegt.
+      match /members/{uid} {
+        allow read: if isMember() || (request.auth != null && request.auth.uid == uid);
+        allow write: if isAdmin();
+      }
+
+      // Bestand, Regeln, Spiele, Fotos, Einstellungen
+      match /{collection}/{docId} {
+        allow read, write: if isMember() && collection != 'members';
+      }
+    }
+
+    // Alles ausserhalb der Arbeitsbereiche bleibt gesperrt.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
