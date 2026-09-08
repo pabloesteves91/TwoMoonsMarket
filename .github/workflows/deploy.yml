@@ -1,0 +1,103 @@
+name: Deploy
+
+# Baut die App, holt die aktuellen Cardmarket-Preise und veröffentlicht beides
+# auf Firebase Hosting. Läuft bei jedem Push auf den Entwicklungszweig, täglich
+# um 05:15 UTC für frische Preise, und auf Knopfdruck ("Run workflow").
+on:
+  push:
+    branches: [main, claude/tcg-collector-app-oukxlm]
+  schedule:
+    - cron: '15 5 * * *'
+  workflow_dispatch:
+    inputs:
+      skip_prices:
+        description: 'Preisabruf überspringen (nur App veröffentlichen)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  FIREBASE_PROJECT: twomoonsmarket-c7649
+  LIVE_URL: https://twomoonsmarket-c7649.web.app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Typen prüfen und bauen
+        run: npm run build
+
+      - name: Cardmarket-Preise holen
+        id: prices
+        if: inputs.skip_prices != true
+        continue-on-error: true
+        run: node scripts/import-prices.mjs --out dist/prices --index
+
+      # Schlägt der Abruf fehl (Cardmarket nicht erreichbar oder Format geändert),
+      # werden die zuletzt veröffentlichten Preisdateien übernommen, damit der
+      # Deploy sie nicht von der Seite entfernt.
+      - name: Bisherige Preisdateien behalten
+        if: steps.prices.outcome != 'success'
+        run: |
+          set -u
+          base="${LIVE_URL}/prices"
+          if ! curl -fsS --max-time 30 "$base/index.json" -o /tmp/index.json; then
+            echo "Keine bisherigen Preisdateien gefunden – der Deploy läuft ohne."
+            exit 0
+          fi
+          mkdir -p dist/prices
+          cp /tmp/index.json dist/prices/index.json
+          node -e "
+            const m = require('/tmp/index.json');
+            for (const f of m.files) console.log(f.file);
+          " | while read -r file; do
+            echo "Übernehme $file"
+            curl -fsS --max-time 300 "$base/$file" -o "dist/prices/$file" || echo "  fehlgeschlagen: $file"
+          done
+
+      - name: Umfang der Veröffentlichung
+        run: du -sh dist dist/prices 2>/dev/null || du -sh dist
+
+      - name: Firebase-Zugangsdaten bereitstellen
+        env:
+          SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SERVICE_ACCOUNT" ]; then
+            echo "::error::Das Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt. Anleitung: src/firebase/README.md"
+            exit 1
+          fi
+          printf '%s' "$SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-key.json" >> "$GITHUB_ENV"
+
+      - name: App veröffentlichen
+        run: npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --non-interactive
+
+      # Getrennter Schritt: fehlt die Firestore-Datenbank noch, soll die App
+      # trotzdem online gehen – die Meldung sagt dann, was zu tun ist.
+      - name: Security Rules veröffentlichen
+        continue-on-error: true
+        run: |
+          if ! npx --yes firebase-tools@latest deploy --only firestore:rules --project "$FIREBASE_PROJECT" --non-interactive; then
+            echo "::warning::Security Rules konnten nicht veröffentlicht werden. Ist die Firestore-Datenbank in der Firebase-Konsole schon angelegt?"
+            exit 1
+          fi
+
+      - name: Zugangsdaten entfernen
+        if: always()
+        run: rm -f "$RUNNER_TEMP/firebase-key.json"
+
+      - name: Ergebnis
+        run: echo "Veröffentlicht auf ${LIVE_URL}" >> "$GITHUB_STEP_SUMMARY"

@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { repo } from '../db';
 import { parsePriceFile, type ImportResult } from '../lib/cardmarket';
 import { formatDate, formatMoney, formatNumber } from '../lib/format';
+import {
+  fetchPriceManifest,
+  importPricesFromCloud,
+  type CloudImportProgress,
+  type PriceManifest,
+} from '../lib/cloudPrices';
 import { buildPriceContext, calculatePrice, readBasisWithFallback } from '../lib/pricing';
 import { useStore } from '../store';
 import type { PriceEntry } from '../types';
@@ -13,10 +19,18 @@ export default function Prices() {
   const [dragging, setDragging] = useState(false);
   const [result, setResult] = useState<{ file: string; imported: number; info: ImportResult } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [manifest, setManifest] = useState<PriceManifest | null>(null);
+  const [cloudBusy, setCloudBusy] = useState<CloudImportProgress | null>(null);
+  const [cloudResult, setCloudResult] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<PriceEntry[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   const searchTimer = useRef<number>();
+
+  // Liegen neben der App Preisdateien aus dem Wartungslauf?
+  useEffect(() => {
+    void fetchPriceManifest().then(setManifest);
+  }, []);
 
   useEffect(() => {
     window.clearTimeout(searchTimer.current);
@@ -49,6 +63,29 @@ export default function Prices() {
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
+  async function loadFromCloud() {
+    if (!manifest) return;
+    setError(null);
+    setResult(null);
+    setCloudResult(null);
+    try {
+      const outcome = await importPricesFromCloud(manifest, games, setCloudBusy);
+      await refresh();
+      const skipped = outcome.skippedFiles.length
+        ? ` ${outcome.skippedFiles.length} Datei(en) übersprungen.`
+        : '';
+      setCloudResult(
+        `${formatNumber(outcome.imported)} Preise aus ${outcome.files} Datei(en) übernommen (Stand ${formatDate(
+          Date.parse(outcome.createdAt),
+        )}).${skipped}`,
+      );
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setCloudBusy(null);
     }
   }
 
@@ -98,6 +135,36 @@ export default function Prices() {
 
       <div className="grid grid--two">
         <div className="stack">
+          {manifest ? (
+            <div className="card">
+              <div className="card__title">
+                Automatischer Preisabruf
+                <span className="badge badge--ok">bereit</span>
+              </div>
+              <p className="card__hint">
+                Der Wartungslauf hat am {formatDate(Date.parse(manifest.createdAt))} frische Cardmarket-Preise
+                bereitgestellt. Ein Tipp genügt – kein Datei-Download, kein Rechner nötig.
+              </p>
+              <button
+                type="button"
+                className="btn btn--primary btn--block"
+                disabled={Boolean(cloudBusy)}
+                onClick={() => void loadFromCloud()}
+              >
+                {cloudBusy
+                  ? `${cloudBusy.phase === 'download' ? 'Lädt' : cloudBusy.phase === 'parse' ? 'Liest' : 'Speichert'} ${
+                      cloudBusy.index + 1
+                    }/${cloudBusy.total} …`
+                  : 'Preise jetzt aktualisieren'}
+              </button>
+              {cloudResult ? (
+                <p className="notice notice--ok" style={{ marginTop: 12, marginBottom: 0 }}>
+                  {cloudResult}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           <div
             className={`dropzone${dragging ? ' is-over' : ''}`}
             onClick={() => fileRef.current?.click()}
@@ -157,8 +224,12 @@ export default function Prices() {
             <div className="card__title">Woher bekomme ich die Datei?</div>
             <ol className="small muted" style={{ paddingLeft: 18, margin: 0, display: 'grid', gap: 6 }}>
               <li>
-                Automatisch: <span className="mono">npm run import:prices</span> im Projektordner ausführen. Das
-                Skript legt die Dateien unter <span className="mono">data/</span> ab – anschliessend hier hochladen.
+                Am einfachsten: der Wartungslauf holt die Preise täglich und stellt sie neben der App bereit –
+                dann erscheint oben der Knopf „Preise jetzt aktualisieren".
+              </li>
+              <li>
+                Am Rechner: <span className="mono">npm run import:prices</span> ausführen. Das Skript legt die
+                Dateien unter <span className="mono">data/</span> ab – anschliessend hier hochladen.
               </li>
               <li>
                 Manuell: Preisliste bei{' '}

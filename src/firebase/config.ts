@@ -9,7 +9,7 @@ let authInstance: Auth | undefined;
 let dbInstance: Firestore | undefined;
 
 function getApp(): FirebaseApp {
-  if (!app) app = initializeApp(firebaseConfig);
+  if (!app) app = initializeApp(firebaseConfig());
   return app;
 }
 

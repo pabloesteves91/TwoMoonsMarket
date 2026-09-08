@@ -39,23 +39,21 @@ Deploy nötig, solange der Rechner läuft. Dasselbe funktioniert mit
 
 ### Dauerhaft: Firebase Hosting
 
-Voraussetzung ist ein Firebase-Projekt (console.firebase.google.com). Danach im
-Projektordner:
+Veröffentlicht wird über GitHub Actions – ein Rechner ist dafür nicht nötig.
+Der Workflow `Deploy` (`.github/workflows/deploy.yml`) baut die App, holt die
+aktuellen Preise und veröffentlicht beides; er läuft bei jedem Push, täglich und
+auf Knopfdruck unter *Actions → Deploy → Run workflow*. Einzige Voraussetzung ist
+das Repository-Secret `FIREBASE_SERVICE_ACCOUNT` – die Einrichtung steht in
+[`src/firebase/README.md`](src/firebase/README.md).
+
+Adresse danach: `https://<projekt-id>.web.app`. Eine eigene Domain lässt sich in
+der Firebase-Konsole unter *Hosting → Custom domain* verbinden.
+
+Am Rechner geht es weiterhin direkt:
 
 ```bash
-npx firebase-tools login          # einmalig, öffnet den Browser
-npx firebase-tools use --add      # Firebase-Projekt auswählen, Alias z.B. "default"
-npm run deploy                    # baut und veröffentlicht dist/
+npx firebase-tools login && npm run deploy
 ```
-
-`npm run deploy` gibt die Hosting-URL aus (`https://<projekt-id>.web.app`) – die
-lässt sich auf jedem Handy öffnen. Für jedes weitere Update genügt erneut
-`npm run deploy`. Die Hosting-Konfiguration steht in `firebase.json`; eine eigene
-Domain lässt sich in der Firebase-Konsole unter *Hosting → Custom domain*
-verbinden.
-
-Wird später auch Firestore/Auth aktiviert (siehe unten), bleibt es dasselbe
-Firebase-Projekt – Hosting und Datenbank liegen dann beieinander.
 
 ### Als App auf dem Homescreen
 
@@ -113,19 +111,30 @@ Kurs wird dort manuell gepflegt.
 
 Cardmarket bietet keine offene API, die Preisliste kommt deshalb als Datei in die App.
 
-### Variante A – automatisch
+### Variante A – vollautomatisch (empfohlen)
+
+Der GitHub-Actions-Workflow `Deploy` läuft täglich, lädt die Preislisten und
+veröffentlicht sie zusammen mit der App unter `/prices/`. In der App erscheint
+dann unter **Preise** der Knopf **„Preise jetzt aktualisieren"** – ein Tipp
+genügt, auch auf dem Handy. Kein Datei-Download, kein Rechner.
+
+Weil die Preislisten pro Gerät lokal liegen, muss der Knopf auf jedem Gerät
+einmal getippt werden. Schlägt der Abruf bei Cardmarket fehl, bleiben die zuletzt
+veröffentlichten Dateien stehen und der Grund steht im Actions-Protokoll.
+
+### Variante B – am Rechner
 
 ```bash
 npm run import:prices                 # Magic (1) + Pokémon (6)
-npm run import:prices -- --games 1,6,3 --catalog --out ./data
+npm run import:prices -- --games 1,6,3 --catalog --index --out ./data
 ```
 
 Das Skript legt die Dateien in `data/` ab. Diese anschliessend in der App unter
-**Preise** hochladen (Drag & Drop). Sperrt Cardmarket den direkten Abruf, bricht
-das Skript mit einer Meldung ab – dann Variante B nutzen. Bitte vorab die
+**Preise** hochladen (Drag & Drop). Mit `--index` entsteht zusätzlich ein
+`index.json`, wie es der automatische Abruf verwendet. Bitte vorab die
 Nutzungsbedingungen von Cardmarket für automatisierte Abrufe prüfen.
 
-### Variante B – manuell
+### Variante C – manuell
 
 Preisliste auf <https://www.cardmarket.com/en/Magic/Data/Price-Guide> herunterladen
 und in der App unter **Preise** hochladen.
@@ -169,15 +178,10 @@ Preislisten bleiben bewusst lokal – pro Spiel sind das schnell über 50 000
 Datensätze, die für alle identisch und jederzeit neu importierbar sind. Praktische
 Folge: **der Preisimport läuft einmal pro Gerät**, der Bestand ist sofort überall.
 
-Einrichtung (Firestore anlegen, Konten erstellen, Security Rules veröffentlichen,
-Mitglieder freischalten): [`src/firebase/README.md`](src/firebase/README.md).
-Kurzfassung:
-
-```bash
-cp .env.example .env.local   # Werte aus der Firebase-Konsole eintragen
-npm run deploy:rules         # Security Rules veröffentlichen
-npm run deploy               # App veröffentlichen
-```
+Einrichtung (Firestore anlegen, Konten erstellen, Mitglieder freischalten):
+[`src/firebase/README.md`](src/firebase/README.md) – dort Schritt für Schritt,
+komplett im Handy-Browser erledigbar. Auf Firebase Hosting holt sich die App ihre
+Konfiguration selbst (`/__/firebase/init.json`), es muss nichts abgetippt werden.
 
 Zugriff hat nur, wer in Firestore unter `workspaces/<id>/members/<uid>`
 eingetragen ist – ein blosses Konto genügt nicht. Wer sich ohne Freischaltung
@@ -196,10 +200,12 @@ gleichermassen, die Oberfläche kennt den Unterschied nicht.
 ```
 firebase.json               Hosting- und Firestore-Konfiguration
 firestore.rules             Security Rules (Zugriff nur für freigeschaltete Mitglieder)
+.github/workflows/          Build, Preisabruf und Deploy über GitHub Actions
 public/                     App-Icons und Web-App-Manifest
 scripts/import-prices.mjs   Download der Cardmarket-Preislisten
 src/lib/pricing.ts          Preisregeln, Matching, Rundung
 src/lib/cardmarket.ts       Import-Parser (JSON/CSV, Spaltenerkennung)
+src/lib/cloudPrices.ts      Preisabruf aus dem Web (/prices/index.json)
 src/lib/exporters.ts        CSV-Export-Formate
 src/db/                     Repository-Interface + IndexedDB-Implementierung
 src/firebase/               Firestore-Repository, Login-Gate, Konfiguration

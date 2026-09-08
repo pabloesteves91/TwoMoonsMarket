@@ -9,6 +9,11 @@
  *   node scripts/import-prices.mjs --games 1,6,3    # eigene Cardmarket-Spiel-IDs
  *   node scripts/import-prices.mjs --out ./data     # Zielordner
  *   node scripts/import-prices.mjs --catalog        # zusätzlich Produktnamen laden
+ *   node scripts/import-prices.mjs --index          # index.json für den Abruf aus der App
+ *
+ * Mit --index entstehen Dateien mit festen Namen (price-guide-magic.json) plus
+ * ein index.json. Wird dieser Ordner mitveröffentlicht, kann die App die Preise
+ * direkt aus dem Web laden – ohne Datei-Upload und ohne Rechner.
  *
  * Hinweis: Cardmarket bietet keine offene API. Das Skript versucht die öffentlich
  * ausgelieferten Preislisten-Dateien; ändert Cardmarket die Struktur oder verlangt
@@ -33,14 +38,15 @@ const CATALOG_URLS = (gameId) => [
 ];
 
 function parseArgs() {
-  const args = { games: [1, 6], out: './data', catalog: false };
+  const args = { games: [1, 6], out: './data', catalog: false, index: false };
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--games') args.games = argv[++i].split(',').map((v) => Number(v.trim()));
     else if (arg === '--out') args.out = argv[++i];
     else if (arg === '--catalog') args.catalog = true;
+    else if (arg === '--index') args.index = true;
     else if (arg === '--help' || arg === '-h') {
-      console.log('Optionen: --games 1,6  --out ./data  --catalog');
+      console.log('Optionen: --games 1,6  --out ./data  --catalog  --index');
       exit(0);
     }
   }
@@ -77,10 +83,14 @@ async function tryDownload(urls) {
 }
 
 async function main() {
-  const { games, out, catalog } = parseArgs();
+  const { games, out, catalog, index } = parseArgs();
   await mkdir(out, { recursive: true });
   const stamp = new Date().toISOString().slice(0, 10);
+  const manifest = { createdAt: new Date().toISOString(), files: [] };
   let failures = 0;
+
+  // Mit --index feste Dateinamen, damit die App immer dieselbe URL abrufen kann
+  const name = (kind, label, ext) => (index ? `${kind}-${label}.${ext}` : `${kind}-${label}-${stamp}.${ext}`);
 
   for (const gameId of games) {
     const label = GAME_NAMES[gameId] ?? `game-${gameId}`;
@@ -88,9 +98,10 @@ async function main() {
     try {
       const { url, body } = await tryDownload(PRICE_GUIDE_URLS(gameId));
       const ext = url.endsWith('.csv') ? 'csv' : 'json';
-      const target = `${out}/price-guide-${label}-${stamp}.${ext}`;
-      await writeFile(target, body, 'utf8');
-      console.log(`✓ Preisliste ${label}: ${target} (${(body.length / 1e6).toFixed(1)} MB, Quelle ${url})`);
+      const file = name('price-guide', label, ext);
+      await writeFile(`${out}/${file}`, body, 'utf8');
+      manifest.files.push({ kind: 'priceGuide', game: label, cardmarketGameId: gameId, file, bytes: body.length });
+      console.log(`✓ Preisliste ${label}: ${out}/${file} (${(body.length / 1e6).toFixed(1)} MB, Quelle ${url})`);
     } catch (err) {
       failures++;
       console.error(`✗ Preisliste ${label} fehlgeschlagen.\n${err.message}`);
@@ -100,13 +111,25 @@ async function main() {
     try {
       const { url, body } = await tryDownload(CATALOG_URLS(gameId));
       const ext = url.endsWith('.csv') ? 'csv' : 'json';
-      const target = `${out}/products-${label}-${stamp}.${ext}`;
-      await writeFile(target, body, 'utf8');
-      console.log(`✓ Produktkatalog ${label}: ${target} (Quelle ${url})`);
+      const file = name('products', label, ext);
+      await writeFile(`${out}/${file}`, body, 'utf8');
+      manifest.files.push({ kind: 'catalog', game: label, cardmarketGameId: gameId, file, bytes: body.length });
+      console.log(`✓ Produktkatalog ${label}: ${out}/${file} (Quelle ${url})`);
     } catch (err) {
       failures++;
       console.error(`✗ Produktkatalog ${label} fehlgeschlagen.\n${err.message}`);
     }
+  }
+
+  if (index) {
+    if (manifest.files.length === 0) {
+      console.error('\nKein einziger Download hat geklappt – index.json wird nicht geschrieben.');
+      exit(1);
+    }
+    // Kataloge zuerst: sie liefern die Kartennamen, die Preisliste ergänzt danach die Preise
+    manifest.files.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'catalog' ? -1 : 1));
+    await writeFile(`${out}/index.json`, JSON.stringify(manifest, null, 2), 'utf8');
+    console.log(`✓ Manifest: ${out}/index.json (${manifest.files.length} Dateien)`);
   }
 
   if (failures > 0) {
@@ -118,7 +141,7 @@ async function main() {
     );
     exit(1);
   }
-  console.log(`\nFertig. Dateien liegen in ${out} und können in der App unter "Preise" hochgeladen werden.`);
+  console.log(`\nFertig. Dateien liegen in ${out}.`);
 }
 
 main().catch((err) => {
