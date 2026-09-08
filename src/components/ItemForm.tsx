@@ -282,25 +282,22 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
         ) : null}
 
         {showSuggestions && suggestions.length > 0 ? (
-          <ul
-            className="list-reset card card--pad-sm"
-            style={{ position: 'absolute', zIndex: 5, insetInline: 0, marginTop: 4, maxHeight: 240, overflowY: 'auto' }}
-          >
+          <ul className="list-reset suggestions">
             {suggestions.map((entry) => (
               <li key={entry.id}>
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--block"
-                  style={{ justifyContent: 'space-between' }}
-                  onClick={() => applySuggestion(entry)}
-                >
-                  <span>
-                    {entry.name}
-                    {entry.set ? <span className="cell-sub"> · {entry.set}</span> : null}
+                <button type="button" className="suggestion" onClick={() => applySuggestion(entry)}>
+                  <span className="suggestion__text">
+                    <span className="cell-main">{entry.name}</span>
+                    <br />
+                    <span className="cell-sub">
+                      {entry.set ?? 'Set unbekannt'}
+                      {entry.number ? ` · #${entry.number}` : ''}
+                      {entry.rarity ? ` · ${entry.rarity}` : ''}
+                    </span>
                   </span>
-                  <span className="dim small">
+                  <span className="suggestion__price">
                     {entry.trend ?? entry.avg ?? entry.low ?? entry.foilTrend ? (
-                      formatMoney(entry.trend ?? entry.avg ?? entry.low ?? null, settings)
+                      formatMoney(entry.trend ?? entry.avg ?? entry.low ?? null, settings, { showCode: false })
                     ) : (
                       <span className="badge badge--warn">ohne Preis</span>
                     )}

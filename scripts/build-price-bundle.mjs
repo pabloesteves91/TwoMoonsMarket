@@ -39,8 +39,10 @@ const PRICE_FIELDS = [
   ['foilAvg30', ['foilAvg30', 'foil-avg30']],
 ];
 
-const NAME_KEYS = ['name', 'enName', 'productName'];
-const SET_KEYS = ['expansionName', 'expansion', 'setName', 'set', 'expansionCode'];
+const NAME_KEYS = ['name', 'enName', 'productName', 'engName'];
+const SET_KEYS = ['expansionName', 'expansion', 'setName', 'set', 'expansionCode', 'abbreviation'];
+const NUMBER_KEYS = ['number', 'collectorNumber', 'cardNumber', 'nr'];
+const RARITY_KEYS = ['rarity', 'rarityName'];
 
 function pick(row, keys) {
   for (const key of keys) {
@@ -52,7 +54,7 @@ function pick(row, keys) {
 
 function listOf(data) {
   if (Array.isArray(data)) return data;
-  for (const key of ['priceGuides', 'products', 'prices', 'data', 'items', 'entries']) {
+  for (const key of ['priceGuides', 'products', 'expansion', 'expansions', 'prices', 'data', 'items', 'entries']) {
     if (Array.isArray(data?.[key])) return data[key];
   }
   return [];
@@ -95,16 +97,43 @@ async function main() {
 
     const catalogFile = group.files.find((f) => f.kind === 'catalog' && f.file.endsWith('.json'));
     const priceFile = group.files.find((f) => f.kind === 'priceGuide' && f.file.endsWith('.json'));
+    const expansionFile = group.files.find((f) => f.kind === 'expansions' && f.file.endsWith('.json'));
     if (!priceFile) continue;
+
+    // Editionsnummer -> Name, falls die Editionsliste geladen werden konnte
+    const expansions = new Map();
+    if (expansionFile) {
+      for (const row of listOf(await readJson(expansionFile.file))) {
+        const id = Number(row.idExpansion ?? row.id);
+        const label = pick(row, ['enName', 'name', 'expansionName', 'localization']);
+        if (id && label) expansions.set(id, label);
+      }
+      console.log(`· ${game}: ${expansions.size.toLocaleString('de-CH')} Editionen`);
+    }
 
     const names = new Map();
     if (catalogFile) {
-      for (const row of listOf(await readJson(catalogFile.file))) {
+      const rows = listOf(await readJson(catalogFile.file));
+      // Diagnose: verrät im Protokoll, welche Felder Cardmarket tatsächlich
+      // liefert – ohne das lässt sich fehlender Set-Name nur raten.
+      if (rows[0]) console.log(`· ${game}: Katalogfelder = ${Object.keys(rows[0]).join(', ')}`);
+
+      for (const row of rows) {
         const id = Number(row.idProduct ?? row.id);
         if (!id) continue;
-        names.set(id, { name: pick(row, NAME_KEYS), set: pick(row, SET_KEYS) });
+        const expansionId = Number(row.idExpansion ?? row.expansionId);
+        names.set(id, {
+          name: pick(row, NAME_KEYS),
+          set: pick(row, SET_KEYS) ?? (expansionId ? expansions.get(expansionId) : undefined),
+          number: pick(row, NUMBER_KEYS),
+          rarity: pick(row, RARITY_KEYS),
+        });
       }
-      console.log(`· ${game}: ${names.size.toLocaleString('de-CH')} Kartennamen aus dem Katalog`);
+      const withSet = [...names.values()].filter((entry) => entry.set).length;
+      console.log(
+        `· ${game}: ${names.size.toLocaleString('de-CH')} Kartennamen aus dem Katalog, ` +
+          `davon ${withSet.toLocaleString('de-CH')} mit Set`,
+      );
     }
 
     const rows = [];
@@ -116,6 +145,8 @@ async function main() {
       const meta = names.get(id);
       if (meta?.name) out.name = meta.name;
       if (meta?.set) out.expansion = meta.set;
+      if (meta?.number) out.number = meta.number;
+      if (meta?.rarity) out.rarity = meta.rarity;
 
       let hasPrice = false;
       for (const [target, keys] of PRICE_FIELDS) {
@@ -145,7 +176,8 @@ async function main() {
     });
     console.log(
       `✓ ${game}: ${rows.length.toLocaleString('de-CH')} Karten → ${file} ` +
-        `(${(body.length / 1e6).toFixed(1)} MB, davon ${rows.filter((r) => r.name).length.toLocaleString('de-CH')} mit Namen)`,
+        `(${(body.length / 1e6).toFixed(1)} MB, ${rows.filter((r) => r.name).length.toLocaleString('de-CH')} mit Namen, ` +
+        `${rows.filter((r) => r.expansion).length.toLocaleString('de-CH')} mit Set)`,
     );
 
     // Rohdateien entfernen, damit sie nicht mitveröffentlicht werden
