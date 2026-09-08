@@ -100,15 +100,21 @@ async function main() {
     const expansionFile = group.files.find((f) => f.kind === 'expansions' && f.file.endsWith('.json'));
     if (!priceFile) continue;
 
-    // Editionsnummer -> Name, falls die Editionsliste geladen werden konnte
+    // Editionsnummer -> Abkürzung und Name. Im Laden zählt die Abkürzung
+    // ("TLA"), der ausgeschriebene Name steht in der App daneben.
     const expansions = new Map();
     if (expansionFile) {
       for (const row of listOf(await readJson(expansionFile.file))) {
         const id = Number(row.idExpansion ?? row.id);
-        const label = pick(row, ['enName', 'name', 'expansionName', 'localization']);
-        if (id && label) expansions.set(id, label);
+        if (!id) continue;
+        const abbreviation = pick(row, ['abbreviation', 'abbr', 'code', 'expansionCode']);
+        const fullName = pick(row, ['enName', 'name', 'expansionName', 'localization']);
+        if (abbreviation || fullName) expansions.set(id, { abbreviation, name: fullName });
       }
-      console.log(`· ${game}: ${expansions.size.toLocaleString('de-CH')} Editionen`);
+      const withAbbr = [...expansions.values()].filter((entry) => entry.abbreviation).length;
+      console.log(
+        `· ${game}: ${expansions.size.toLocaleString('de-CH')} Editionen, davon ${withAbbr} mit Abkürzung`,
+      );
     }
 
     const names = new Map();
@@ -122,9 +128,11 @@ async function main() {
         const id = Number(row.idProduct ?? row.id);
         if (!id) continue;
         const expansionId = Number(row.idExpansion ?? row.expansionId);
+        const expansion = expansionId ? expansions.get(expansionId) : undefined;
         names.set(id, {
           name: pick(row, NAME_KEYS),
-          set: pick(row, SET_KEYS) ?? (expansionId ? expansions.get(expansionId) : undefined),
+          set: pick(row, SET_KEYS) ?? expansion?.abbreviation ?? expansion?.name,
+          setName: expansion?.abbreviation ? expansion.name : undefined,
           number: pick(row, NUMBER_KEYS),
           rarity: pick(row, RARITY_KEYS),
         });
@@ -145,6 +153,7 @@ async function main() {
       const meta = names.get(id);
       if (meta?.name) out.name = meta.name;
       if (meta?.set) out.expansion = meta.set;
+      if (meta?.setName) out.setName = meta.setName;
       if (meta?.number) out.number = meta.number;
       if (meta?.rarity) out.rarity = meta.rarity;
 

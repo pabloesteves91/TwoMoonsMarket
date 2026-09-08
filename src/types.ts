@@ -49,8 +49,10 @@ export interface PriceEntry {
   gameId: GameId;
   cardmarketProductId?: number;
   name: string;
-  /** Set / Edition / Expansion */
+  /** Set / Edition – im Laden die Abkürzung, z.B. "TLA" */
   set?: string;
+  /** Ausgeschriebener Editionsname, z.B. "Avatar: The Last Airbender" */
+  setName?: string;
   number?: string;
   rarity?: string;
   /** Normalisierter Schlüssel für das Matching mit Bestandseinträgen (Spiel|Name|Set) */

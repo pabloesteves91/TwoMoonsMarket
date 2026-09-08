@@ -52,6 +52,12 @@ jobs:
         id: prices
         if: inputs.skip_prices != true
         continue-on-error: true
+        # Ohne diese Zugangsdaten läuft alles wie bisher, nur ohne Editionsnamen
+        env:
+          CM_APP_TOKEN: ${{ secrets.CM_APP_TOKEN }}
+          CM_APP_SECRET: ${{ secrets.CM_APP_SECRET }}
+          CM_ACCESS_TOKEN: ${{ secrets.CM_ACCESS_TOKEN }}
+          CM_ACCESS_SECRET: ${{ secrets.CM_ACCESS_SECRET }}
         run: |
           node scripts/import-prices.mjs --out dist/prices --index --catalog
           node scripts/build-price-bundle.mjs dist/prices

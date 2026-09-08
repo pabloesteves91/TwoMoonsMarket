@@ -112,6 +112,8 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
   }, [draft, matchedEntry, settings, overrides]);
 
   function applySuggestion(entry: PriceEntry) {
+    // Set (Abkürzung) und Sammlernummer kommen aus dem Vorschlag, damit beim
+    // Erfassen nichts abgetippt werden muss.
     patch({
       name: entry.name,
       set: entry.set,
@@ -290,12 +292,18 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
                     <span className="cell-main">{entry.name}</span>
                     <br />
                     <span className="cell-sub">
-                      {/* Fehlt der Set-Name, ist die Cardmarket-Nummer immerhin
+                      {/* Fehlt die Edition, ist die Cardmarket-Nummer immerhin
                           ein eindeutiges Merkmal für gleichnamige Karten. */}
-                      {entry.set ??
-                        (entry.cardmarketProductId ? `Cardmarket #${entry.cardmarketProductId}` : 'Set unbekannt')}
-                      {entry.number ? ` · #${entry.number}` : ''}
+                      {entry.set ? (
+                        <strong className="suggestion__set">{entry.set}</strong>
+                      ) : entry.cardmarketProductId ? (
+                        `Cardmarket #${entry.cardmarketProductId}`
+                      ) : (
+                        'Set unbekannt'
+                      )}
+                      {entry.number ? ` · Nr. ${entry.number}` : ''}
                       {entry.rarity ? ` · ${entry.rarity}` : ''}
+                      {entry.setName ? ` · ${entry.setName}` : ''}
                     </span>
                   </span>
                   <span className="suggestion__price">

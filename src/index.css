@@ -1038,3 +1038,9 @@ tbody tr:hover {
   color: var(--text-muted);
   white-space: nowrap;
 }
+
+.suggestion__set {
+  color: var(--moon);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
