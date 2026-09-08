@@ -290,7 +290,10 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
                     <span className="cell-main">{entry.name}</span>
                     <br />
                     <span className="cell-sub">
-                      {entry.set ?? 'Set unbekannt'}
+                      {/* Fehlt der Set-Name, ist die Cardmarket-Nummer immerhin
+                          ein eindeutiges Merkmal für gleichnamige Karten. */}
+                      {entry.set ??
+                        (entry.cardmarketProductId ? `Cardmarket #${entry.cardmarketProductId}` : 'Set unbekannt')}
                       {entry.number ? ` · #${entry.number}` : ''}
                       {entry.rarity ? ` · ${entry.rarity}` : ''}
                     </span>

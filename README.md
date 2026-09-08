@@ -185,9 +185,12 @@ und in der App unter **Preise** hochladen.
   einfach zusätzlich hochladen lässt (die Datensätze werden über die Produkt-ID
   zusammengeführt).
 * **Produkt-Katalog** (JSON oder CSV) mit `idProduct`, `name`, `expansion`.
-* **Editionsliste** – der Produktkatalog führt die Edition teils nur als Nummer;
-  liegt die Editionsliste vor, ergänzt der Build daraus den Set-Namen. Fehlt sie,
-  bleiben die Sets leer und die App zeigt „Set unbekannt".
+* **Editionsliste** – der Produktkatalog führt die Edition nur als Nummer
+  (`idExpansion`), nicht als Namen. Liegt die Editionsliste vor, ergänzt der
+  Build daraus den Set-Namen; solange sie fehlt, zeigt die App statt des Sets die
+  Cardmarket-Produktnummer, damit gleichnamige Karten unterscheidbar bleiben.
+  `scripts/probe-cardmarket.mjs` sucht die Datei und protokolliert das Ergebnis
+  bei jedem Lauf.
 * **Beliebige CSV** mit Namens- und Preisspalten. Header werden über Aliase erkannt
   (`Name`, `Expansion`/`Set`, `Trend Price`, `Avg. Sell Price`, `Foil Trend`, …),
   Trennzeichen (`;` `,` Tab `|`) und Zahlenformat (`1.234,56` wie `1234.56`)

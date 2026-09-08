@@ -59,6 +59,12 @@ jobs:
       # Schlägt der Abruf fehl (Cardmarket nicht erreichbar oder Format geändert),
       # werden die zuletzt veröffentlichten Preisdateien übernommen, damit der
       # Deploy sie nicht von der Seite entfernt.
+      # Diagnose: die Editionsnamen fehlen im Produktkatalog. Dieser Schritt
+      # sucht die passende Datei und schreibt das Ergebnis ins Protokoll.
+      - name: Editionsliste suchen
+        continue-on-error: true
+        run: node scripts/probe-cardmarket.mjs
+
       - name: Bisherige Preisdateien behalten
         if: steps.prices.outcome != 'success'
         run: |

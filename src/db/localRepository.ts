@@ -213,8 +213,17 @@ export const localRepository: Repository = {
       }
     }
 
+    // Kurze Namen zuerst (die exakte Übereinstimmung steht oben), gleichnamige
+    // Karten nach Preis – ohne Set-Namen ist das die einzige nachvollziehbare
+    // Reihenfolge, und die teure Variante ist meist die gesuchte.
+    const priceOf = (entry: PriceEntry) => entry.trend ?? entry.avg ?? entry.low ?? 0;
     return [...found.values()]
-      .sort((a, b) => a.name.length - b.name.length || a.name.localeCompare(b.name))
+      .sort(
+        (a, b) =>
+          a.name.length - b.name.length ||
+          a.name.localeCompare(b.name) ||
+          priceOf(b) - priceOf(a),
+      )
       .slice(0, limit);
   },
 
