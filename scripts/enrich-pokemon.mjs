@@ -14,7 +14,12 @@
  *
  * Nutzung: node scripts/enrich-pokemon.mjs [ordner]   (Standard: dist/prices)
  *
- * Datenquelle: pokemontcg.io (frei, ohne Anmeldung nutzbar).
+ * Datenquelle: pokemontcg.io (frei, ohne Anmeldung nutzbar). Die Daten werden
+ * bevorzugt aus dem offenen Datenbestand des Projekts geladen: die API selbst
+ * antwortet immer wieder mit 500 oder 502, und ein Lauf braucht Hunderte
+ * Anfragen. Der Datenbestand liegt als feste Dateien auf einem Auslieferungsnetz
+ * und ist damit ungleich verlässlicher. Antwortet er nicht, wird die API als
+ * Rückfalllösung versucht.
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
@@ -23,6 +28,7 @@ import { argv, exit } from 'node:process';
 const dir = argv[2] ?? 'dist/prices';
 const UA = 'TwoMoonsMarket/0.1 (+https://github.com/pabloesteves91/TwoMoonsMarket)';
 const API = 'https://api.pokemontcg.io/v2';
+const DATA = process.env.POKEMON_DATA_BASE ?? 'https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/master';
 
 /**
  * Zeitgrenze für das Laden der Sets. Die Quelle antwortet zeitweise mit 500 oder
@@ -44,6 +50,24 @@ export function normalizeName(name) {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
+}
+
+/**
+ * Liest die Variantennummer aus einem Cardmarket-Namen.
+ *
+ * Kommt eine Karte mehrfach in derselben Edition vor – etwa als gewöhnlicher
+ * Druck und als Vollbild –, hängt Cardmarket "(V1)", "(V2)" an. Ohne diese
+ * Unterscheidung bekämen alle Drucke dieselbe Sammlernummer.
+ */
+export function variantOf(name) {
+  const match = /\(\s*v\s*(\d+)\s*\)/i.exec(String(name));
+  return match ? Number(match[1]) : 1;
+}
+
+/** Sammlernummern sortieren sich nach Zahl, nicht nach Text: 2 vor 192. */
+function numeric(value) {
+  const digits = /\d+/.exec(String(value ?? ''));
+  return digits ? Number(digits[0]) : Number.MAX_SAFE_INTEGER;
 }
 
 /**
@@ -102,7 +126,55 @@ async function getJson(url, attempt = 1, maxAttempts = 3) {
   return response.json();
 }
 
-async function loadKnownSets() {
+/**
+ * Lädt Sets und Karten aus dem festen Datenbestand.
+ *
+ * Eine Datei je Set, dafür ohne Seitenaufteilung – und von einem
+ * Auslieferungsnetz statt aus der Anwendung. Mehrere Abrufe laufen nebeneinander,
+ * damit der Gesamtlauf kurz bleibt.
+ */
+async function loadFromDataFiles() {
+  const sets = await getJson(`${DATA}/sets/en.json`);
+  if (!Array.isArray(sets) || sets.length === 0) throw new Error('Set-Liste leer');
+  console.log(`· Pokémon-Datenbestand: ${sets.length} Sets`);
+
+  const setsById = new Map(sets.map((set) => [set.id, set]));
+  const byName = new Map();
+  const failed = [];
+  let cards = 0;
+
+  const queue = [...sets];
+  const deadline = Date.now() + TIME_BUDGET_MS;
+  const worker = async () => {
+    for (let set = queue.shift(); set; set = queue.shift()) {
+      if (Date.now() > deadline) return;
+      try {
+        const list = await getJson(`${DATA}/cards/en/${set.id}.json`);
+        for (const card of list ?? []) {
+          const key = normalizeName(card.name);
+          const entry = { setId: set.id, number: card.number, rarity: card.rarity };
+          const existing = byName.get(key);
+          if (existing) existing.push(entry);
+          else byName.set(key, [entry]);
+          cards++;
+        }
+      } catch (err) {
+        failed.push(`${set.id} (${err.message})`);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: 8 }, worker));
+
+  console.log(`· Pokémon-Datenbestand: ${cards.toLocaleString('de-CH')} Karten geladen`);
+  if (failed.length) {
+    console.warn(`· ${failed.length} Sets nicht abrufbar, die ersten drei: ${failed.slice(0, 3).join(' | ')}`);
+  }
+  if (cards === 0) throw new Error('Kein einziges Set abrufbar');
+  return { setsById, byName };
+}
+
+/** Rückfalllösung: dieselben Daten über die API, Set für Set und Seite für Seite. */
+async function loadFromApi() {
   const sets = (await getJson(`${API}/sets?pageSize=250`)).data ?? [];
   console.log(`· pokemontcg.io: ${sets.length} Sets`);
 
@@ -161,6 +233,16 @@ async function loadKnownSets() {
   return { setsById, byName };
 }
 
+/** Erst der feste Datenbestand, bei Ausfall die API. */
+async function loadKnownCards() {
+  try {
+    return await loadFromDataFiles();
+  } catch (err) {
+    console.warn(`· Datenbestand nicht abrufbar (${err.message}), versuche die API`);
+    return loadFromApi();
+  }
+}
+
 async function main() {
   let index;
   try {
@@ -192,11 +274,11 @@ async function main() {
       productsByExpansion.set(expansionId, []);
     }
     groups.get(expansionId).push(key);
-    productsByExpansion.get(expansionId).push({ id, key });
+    productsByExpansion.get(expansionId).push({ id, key, variant: variantOf(product.name) });
   }
   console.log(`· Cardmarket: ${products.length.toLocaleString('de-CH')} Produkte in ${groups.size} Editionen`);
 
-  const { setsById, byName } = await loadKnownSets();
+  const { setsById, byName } = await loadKnownCards();
   const matched = matchExpansions(groups, byName);
   console.log(`· ${matched.size} von ${groups.size} Editionen zugeordnet`);
 
@@ -206,8 +288,12 @@ async function main() {
     // Der PTCGO-Code ist das Kürzel, das im Laden verwendet wird
     const code = (set?.ptcgoCode ?? set?.id ?? '').toUpperCase();
     for (const product of productsByExpansion.get(expansionId) ?? []) {
-      const card = (byName.get(product.key) ?? []).find((entry) => entry.setId === match.setId);
-      if (!card) continue;
+      const printings = (byName.get(product.key) ?? [])
+        .filter((entry) => entry.setId === match.setId)
+        .sort((a, b) => numeric(a.number) - numeric(b.number));
+      if (printings.length === 0) continue;
+      // V2 ist der zweite Druck derselben Karte; gibt es ihn nicht, bleibt es beim ersten
+      const card = printings[Math.min(product.variant, printings.length) - 1];
       meta[product.id] = { set: code, setName: set?.name, number: card.number, rarity: card.rarity };
     }
   }
