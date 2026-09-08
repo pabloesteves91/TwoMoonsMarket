@@ -89,8 +89,9 @@ export default function Rules() {
       <div className="card" style={{ marginTop: 16 }}>
         <div className="card__title">Zustandsfaktoren</div>
         <p className="card__hint">
-          Die Cardmarket-Preisliste bezieht sich auf Near-Mint-Ware. Optional lassen sich Karten in schlechterem
-          Zustand automatisch günstiger bepreisen.
+          Die Cardmarket-Preisliste kennt keine Preise je Zustand – die Angaben gelten für Near-Mint-Ware.
+          Mit diesen Faktoren bekommt eine gespielte Karte automatisch einen entsprechend tieferen Preis.
+          Ohne sie kostet eine PO-Karte gleich viel wie eine makellose.
         </p>
         <label className="checkbox" style={{ marginBottom: 12 }}>
           <input
@@ -100,6 +101,21 @@ export default function Rules() {
           />
           Zustandsfaktoren anwenden
         </label>
+
+        {draft.applyConditionFactors ? (
+          <p className="small muted" style={{ marginTop: 0, marginBottom: 12 }}>
+            Beispiel bei einem Trend-Preis von 10.00 EUR:{' '}
+            {(['NM', 'EX', 'GD', 'LP'] as const)
+              .map(
+                (condition) =>
+                  `${condition} ${formatMoney(
+                    example(draft.nonFoil, 10) * (draft.conditionFactors[condition] / 100),
+                    draft,
+                  )}`,
+              )
+              .join(' · ')}
+          </p>
+        ) : null}
         <div className="field-row">
           {Object.entries(draft.conditionFactors).map(([condition, factor]) => (
             <div key={condition}>

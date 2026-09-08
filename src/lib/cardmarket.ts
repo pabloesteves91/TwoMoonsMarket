@@ -33,7 +33,8 @@ type Aliases = Record<string, string[]>;
 const COLUMN_ALIASES: Aliases = {
   cardmarketProductId: ['idproduct', 'productid', 'product id', 'id'],
   name: ['name', 'cardname', 'card name', 'englishname', 'english name', 'product', 'productname'],
-  set: ['set', 'setname', 'expansion', 'expansionname', 'edition', 'series'],
+  set: ['set', 'expansion', 'edition', 'series', 'expansioncode', 'abbreviation'],
+  setName: ['setname', 'expansionname', 'editionname'],
   number: ['number', 'collectornumber', 'cardnumber', 'no', 'nr'],
   rarity: ['rarity', 'seltenheit'],
   avg: ['avg', 'avgsellprice', 'avg sell price', 'averagesellprice', 'average', 'durchschnitt'],
@@ -90,7 +91,11 @@ function makeEntry(gameId: GameId, raw: Record<string, unknown>, source: string)
     cardmarketProductId: productId,
     name: displayName,
     set,
-    number: typeof raw.number === 'string' && raw.number.trim() ? raw.number.trim() : undefined,
+    setName: typeof raw.setName === 'string' && raw.setName.trim() ? raw.setName.trim() : undefined,
+    number:
+      raw.number !== undefined && raw.number !== null && String(raw.number).trim()
+        ? String(raw.number).trim()
+        : undefined,
     rarity: typeof raw.rarity === 'string' && raw.rarity.trim() ? raw.rarity.trim() : undefined,
     matchKey: buildMatchKey(gameId, displayName, set),
     nameKey: buildNameKey(gameId, displayName),
@@ -161,8 +166,8 @@ function parseJsonPrices(text: string, gameId: GameId, source: string): ImportRe
       )?.[0];
       if (field) mapped[field] = value;
     }
-    // Cardmarket-Katalog nennt die Expansion je nach Datei anders
-    if (mapped.set === undefined && typeof row.expansionName === 'string') mapped.set = row.expansionName;
+    // Fehlt die Abkürzung, dient der ausgeschriebene Name als Set
+    if (mapped.set === undefined && typeof mapped.setName === 'string') mapped.set = mapped.setName;
     const entry = makeEntry(gameId, mapped, source);
     if (entry) entries.push(entry);
     else skipped++;
@@ -220,6 +225,7 @@ export function mergeEntries(existing: PriceEntry | undefined, incoming: PriceEn
   if (incoming.name.startsWith('Produkt #') && !existing.name.startsWith('Produkt #')) {
     merged.name = existing.name;
     merged.set = existing.set ?? incoming.set;
+    merged.setName = existing.setName ?? incoming.setName;
     merged.matchKey = existing.matchKey;
     merged.nameKey = existing.nameKey;
   }

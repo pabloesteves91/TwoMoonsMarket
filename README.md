@@ -71,7 +71,7 @@ angemeldeten Geräte denselben Bestand.
 | Bereich | Inhalt |
 | --- | --- |
 | **Dashboard** | Kartenanzahl, Verkaufswert, Einkaufswert, Marge, wertvollste Positionen, Stand der Preisliste |
-| **Bestand** | Zustand (MT–PO), Sprache, Foil, Menge, Lagerort, Einkaufspreis, Fixpreis, Notiz, Foto; Serienerfassung, Suche, Filter, Sortierung; CSV-Export |
+| **Bestand** | Zustand (MT–PO) mit Preiswirkung, Sprache, Foil, Menge, Lagerort, Einkaufspreis, Fixpreis, Notiz, Foto; Serienerfassung, Suche, Filter, Sortierung; CSV-Export |
 | **Freigabe** | Vergleich Kärtchenpreis ↔ berechneter Preis, Änderungen einzeln bestätigen, Liste zum Umetikettieren als CSV |
 | **Verkäufe** | Verkauf buchen (Menge, Preis, Datum, Kanal), Umsatz/Gewinn/Marge, Umsatzverlauf je Woche, Meistverkauft, CSV-Export, Storno |
 | **Preise** | Preisabruf mit einem Tipp, Import per Drag & Drop (JSON/CSV), Suche in der Preisliste mit berechnetem Verkaufspreis |
@@ -111,6 +111,15 @@ Kärtchenpreis – sie landen also nicht sofort auf der Freigabeliste.
 Im Erfassungsdialog speichert **„+ Nächste"** und hält die Maske offen: Spiel,
 Set, Zustand, Sprache, Foil und Lagerort bleiben stehen, der Name ist leer und
 fokussiert. Beim Durcharbeiten einer Kiste ändert sich meist nur der Name.
+
+### Warum die Basis beim Zustand gleich bleibt
+
+Cardmarket führt je Karte **einen** Marktpreis, nicht einen je Zustand – die
+Spalten sind Trend, Durchschnitt und Tiefstpreis, keine davon ist zustandsbezogen.
+Die Basis ist also der Marktpreis für Near-Mint-Ware und ändert sich nicht, wenn
+ein anderer Zustand gewählt wird; der Zustand wirkt als Faktor darauf. Echte
+Preise je Zustand gäbe es nur aus den laufenden Angeboten, und die stehen nur
+über die Cardmarket-API mit Verkäufer-Konto zur Verfügung.
 
 ### Preisberechnung
 
@@ -173,6 +182,60 @@ Das Skript legt die Dateien in `data/` ab. Diese anschliessend in der App unter
 `index.json`, wie es der automatische Abruf verwendet. Bitte vorab die
 Nutzungsbedingungen von Cardmarket für automatisierte Abrufe prüfen.
 
+### Set-Kürzel und Sammlernummer für Magic (Scryfall)
+
+Der Cardmarket-Katalog führt die Edition nur als Nummer und kennt keine
+Sammlernummer. [Scryfall](https://scryfall.com) ist frei zugänglich, braucht
+keine Anmeldung und führt zu jeder Ausgabe die Cardmarket-Produktnummer mit –
+darüber verbindet `scripts/enrich-scryfall.mjs` beides und ergänzt Set-Kürzel
+(„TLA"), Sammlernummer und Seltenheit.
+
+Die Sammeldatei ist mehrere hundert Megabyte gross und wird deshalb zeilenweise
+verarbeitet. Schlägt der Schritt fehl, fehlen nur diese Angaben; alles andere
+läuft weiter. Datenquelle: Scryfall, frei nutzbar mit Namensnennung.
+
+### Set-Code und Nummer für Pokémon (pokemontcg.io)
+
+Für Pokémon gibt es keine freie Quelle mit Cardmarket-Produktnummern. Die
+Zuordnung läuft deshalb über die Edition: der Cardmarket-Katalog gruppiert die
+Karten nach `idExpansion`, ohne deren Namen zu kennen. `scripts/enrich-pokemon.mjs`
+prüft für jede Gruppe, in welchem bekannten Set die meisten ihrer Kartennamen
+vorkommen. Stimmen mindestens fünf Karten und 30 Prozent überein, gilt die
+Edition als erkannt und ihre Karten bekommen Set-Code (PTCGO, z.B. „ASR"),
+Sammlernummer und Seltenheit.
+
+Ein Abgleich rein über den Kartennamen wäre unbrauchbar – derselbe Name kommt in
+vielen Sets vor. Über die Gruppe ist er eindeutig. Editionen, die sich nicht
+sicher zuordnen lassen, bleiben ohne Set; dort zeigt die App weiterhin die
+Produktnummer.
+
+Datenquelle: pokemontcg.io, frei und ohne Anmeldung nutzbar.
+
+### Editionsnamen über die Cardmarket-API (nur mit Verkäufer-Konto)
+
+Der Produktkatalog führt die Edition nur als Nummer (`idExpansion`). Die Zuordnung
+zu Abkürzung („TLA") und Namen liefert die
+[Cardmarket-API](https://apiv2.cardmarket.com/ws/documentation) mit **einer
+Abfrage je Spiel** – für Magic und Pokémon gleichermassen.
+
+Einrichtung:
+
+Der App-Zugang ist an den Verkäufer-Status gekoppelt; ohne ihn greift der
+Scryfall-Weg oben. Falls der Zugang später besteht:
+
+1. Im Cardmarket-Konto unter *Account → Einstellungen → App-Zugang* eine App
+   anlegen. Cardmarket zeigt danach vier Werte an: App-Token, App-Secret,
+   Access-Token und Access-Secret.
+2. Diese vier Werte auf GitHub als Repository-Secrets hinterlegen
+   (*Settings → Secrets and variables → Actions*):
+   `CM_APP_TOKEN`, `CM_APP_SECRET`, `CM_ACCESS_TOKEN`, `CM_ACCESS_SECRET`.
+
+Mehr ist nicht nötig – der wöchentliche Lauf holt die Editionen dann automatisch.
+Fehlen die Werte, läuft alles wie bisher, nur ohne Set-Namen; die App zeigt
+stattdessen die Cardmarket-Produktnummer.
+
+Die Signatur (OAuth 1.0a, HMAC-SHA1) steckt in `scripts/cardmarket-api.mjs`.
+
 ### Variante C – manuell
 
 Preisliste auf <https://www.cardmarket.com/en/Magic/Data/Price-Guide> herunterladen
@@ -185,9 +248,12 @@ und in der App unter **Preise** hochladen.
   einfach zusätzlich hochladen lässt (die Datensätze werden über die Produkt-ID
   zusammengeführt).
 * **Produkt-Katalog** (JSON oder CSV) mit `idProduct`, `name`, `expansion`.
-* **Editionsliste** – der Produktkatalog führt die Edition teils nur als Nummer;
-  liegt die Editionsliste vor, ergänzt der Build daraus den Set-Namen. Fehlt sie,
-  bleiben die Sets leer und die App zeigt „Set unbekannt".
+* **Editionsliste** – der Produktkatalog führt die Edition nur als Nummer
+  (`idExpansion`), nicht als Namen. Liegt die Editionsliste vor, ergänzt der
+  Build daraus den Set-Namen; solange sie fehlt, zeigt die App statt des Sets die
+  Cardmarket-Produktnummer, damit gleichnamige Karten unterscheidbar bleiben.
+  `scripts/probe-cardmarket.mjs` sucht die Datei und protokolliert das Ergebnis
+  bei jedem Lauf.
 * **Beliebige CSV** mit Namens- und Preisspalten. Header werden über Aliase erkannt
   (`Name`, `Expansion`/`Set`, `Trend Price`, `Avg. Sell Price`, `Foil Trend`, …),
   Trennzeichen (`;` `,` Tab `|`) und Zahlenformat (`1.234,56` wie `1234.56`)

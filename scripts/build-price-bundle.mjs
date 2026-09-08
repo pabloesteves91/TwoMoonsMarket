@@ -98,17 +98,32 @@ async function main() {
     const catalogFile = group.files.find((f) => f.kind === 'catalog' && f.file.endsWith('.json'));
     const priceFile = group.files.find((f) => f.kind === 'priceGuide' && f.file.endsWith('.json'));
     const expansionFile = group.files.find((f) => f.kind === 'expansions' && f.file.endsWith('.json'));
+    // Zusatzangaben je Produktnummer aus einer offenen Quelle (Scryfall für Magic):
+    // Set-Kürzel, Sammlernummer und Seltenheit. Hat Vorrang, weil dort die
+    // Sammlernummer steht, die der Cardmarket-Katalog gar nicht führt.
+    const metaFile = group.files.find((f) => f.kind === 'productMeta' && f.file.endsWith('.json'));
+    let productMeta = null;
+    if (metaFile) {
+      productMeta = await readJson(metaFile.file);
+      console.log(`· ${game}: ${Object.keys(productMeta).length.toLocaleString('de-CH')} Zusatzangaben je Karte`);
+    }
     if (!priceFile) continue;
 
-    // Editionsnummer -> Name, falls die Editionsliste geladen werden konnte
+    // Editionsnummer -> Abkürzung und Name. Im Laden zählt die Abkürzung
+    // ("TLA"), der ausgeschriebene Name steht in der App daneben.
     const expansions = new Map();
     if (expansionFile) {
       for (const row of listOf(await readJson(expansionFile.file))) {
         const id = Number(row.idExpansion ?? row.id);
-        const label = pick(row, ['enName', 'name', 'expansionName', 'localization']);
-        if (id && label) expansions.set(id, label);
+        if (!id) continue;
+        const abbreviation = pick(row, ['abbreviation', 'abbr', 'code', 'expansionCode']);
+        const fullName = pick(row, ['enName', 'name', 'expansionName', 'localization']);
+        if (abbreviation || fullName) expansions.set(id, { abbreviation, name: fullName });
       }
-      console.log(`· ${game}: ${expansions.size.toLocaleString('de-CH')} Editionen`);
+      const withAbbr = [...expansions.values()].filter((entry) => entry.abbreviation).length;
+      console.log(
+        `· ${game}: ${expansions.size.toLocaleString('de-CH')} Editionen, davon ${withAbbr} mit Abkürzung`,
+      );
     }
 
     const names = new Map();
@@ -122,9 +137,11 @@ async function main() {
         const id = Number(row.idProduct ?? row.id);
         if (!id) continue;
         const expansionId = Number(row.idExpansion ?? row.expansionId);
+        const expansion = expansionId ? expansions.get(expansionId) : undefined;
         names.set(id, {
           name: pick(row, NAME_KEYS),
-          set: pick(row, SET_KEYS) ?? (expansionId ? expansions.get(expansionId) : undefined),
+          set: pick(row, SET_KEYS) ?? expansion?.abbreviation ?? expansion?.name,
+          setName: expansion?.abbreviation ? expansion.name : undefined,
           number: pick(row, NUMBER_KEYS),
           rarity: pick(row, RARITY_KEYS),
         });
@@ -143,10 +160,17 @@ async function main() {
 
       const out = { idProduct: id };
       const meta = names.get(id);
+      const extra = productMeta?.[id];
       if (meta?.name) out.name = meta.name;
-      if (meta?.set) out.expansion = meta.set;
-      if (meta?.number) out.number = meta.number;
-      if (meta?.rarity) out.rarity = meta.rarity;
+
+      const set = extra?.set ?? meta?.set;
+      const setName = extra?.setName ?? meta?.setName;
+      if (set) out.expansion = set;
+      if (setName && setName !== set) out.setName = setName;
+      const number = extra?.number ?? meta?.number;
+      if (number) out.number = number;
+      const rarity = extra?.rarity ?? meta?.rarity;
+      if (rarity) out.rarity = rarity;
 
       let hasPrice = false;
       for (const [target, keys] of PRICE_FIELDS) {

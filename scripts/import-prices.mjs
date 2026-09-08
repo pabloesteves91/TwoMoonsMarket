@@ -24,6 +24,7 @@
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import { argv, exit } from 'node:process';
+import { apiGet, credentialsFromEnv } from './cardmarket-api.mjs';
 
 const GAME_NAMES = { 1: 'magic', 3: 'yugioh', 6: 'pokemon' };
 
@@ -130,16 +131,37 @@ async function main() {
       console.error(`✗ Produktkatalog ${label} fehlgeschlagen.\n${err.message}`);
     }
 
-    // Editionsnamen sind optional – fehlen sie, bleibt das Set leer, alles
-    // andere funktioniert weiter.
-    try {
-      const { url, body } = await tryDownload(EXPANSION_URLS(gameId));
-      const file = name('expansions', label, 'json');
-      await writeFile(`${out}/${file}`, body, 'utf8');
-      manifest.files.push({ kind: 'expansions', game: label, cardmarketGameId: gameId, file, bytes: body.length });
-      console.log(`✓ Editionen ${label}: ${out}/${file} (Quelle ${url})`);
-    } catch (err) {
-      console.warn(`· Editionsliste ${label} nicht gefunden – Sets bleiben leer.\n${err.message}`);
+    // Editionsnamen: die Katalogdatei führt nur die Nummer. Den Namen und die
+    // Abkürzung (z.B. "TLA") liefert die Cardmarket-API mit einer einzigen
+    // Abfrage je Spiel. Ohne Zugangsdaten wird der Download-Weg versucht.
+    let expansionsLoaded = false;
+    const credentials = credentialsFromEnv();
+    if (credentials) {
+      try {
+        const data = await apiGet(`/games/${gameId}/expansions`, undefined, credentials);
+        const list = data?.expansion ?? data?.expansions ?? [];
+        const file = name('expansions', label, 'json');
+        await writeFile(`${out}/${file}`, JSON.stringify({ expansion: list }), 'utf8');
+        manifest.files.push({ kind: 'expansions', game: label, cardmarketGameId: gameId, file, bytes: list.length });
+        console.log(`✓ Editionen ${label}: ${list.length} über die API`);
+        expansionsLoaded = true;
+      } catch (err) {
+        console.warn(`· Editionen ${label} über die API fehlgeschlagen: ${err.message}`);
+      }
+    } else {
+      console.log('· Keine API-Zugangsdaten gesetzt (CM_APP_TOKEN & Co.) – versuche den Download-Weg.');
+    }
+
+    if (!expansionsLoaded) {
+      try {
+        const { url, body } = await tryDownload(EXPANSION_URLS(gameId));
+        const file = name('expansions', label, 'json');
+        await writeFile(`${out}/${file}`, body, 'utf8');
+        manifest.files.push({ kind: 'expansions', game: label, cardmarketGameId: gameId, file, bytes: body.length });
+        console.log(`✓ Editionen ${label}: ${out}/${file} (Quelle ${url})`);
+      } catch (err) {
+        console.warn(`· Editionsliste ${label} nicht gefunden – Sets bleiben leer.\n${err.message}`);
+      }
     }
   }
 

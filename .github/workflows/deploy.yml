@@ -52,13 +52,29 @@ jobs:
         id: prices
         if: inputs.skip_prices != true
         continue-on-error: true
+        # Ohne diese Zugangsdaten läuft alles wie bisher, nur ohne Editionsnamen
+        env:
+          CM_APP_TOKEN: ${{ secrets.CM_APP_TOKEN }}
+          CM_APP_SECRET: ${{ secrets.CM_APP_SECRET }}
+          CM_ACCESS_TOKEN: ${{ secrets.CM_ACCESS_TOKEN }}
+          CM_ACCESS_SECRET: ${{ secrets.CM_ACCESS_SECRET }}
         run: |
           node scripts/import-prices.mjs --out dist/prices --index --catalog
+          # Ergänzt Magic um Set-Kürzel, Sammlernummer und Seltenheit; schlägt
+          # der Schritt fehl, fehlen nur diese Angaben.
+          node scripts/enrich-scryfall.mjs dist/prices
+          node scripts/enrich-pokemon.mjs dist/prices
           node scripts/build-price-bundle.mjs dist/prices
 
       # Schlägt der Abruf fehl (Cardmarket nicht erreichbar oder Format geändert),
       # werden die zuletzt veröffentlichten Preisdateien übernommen, damit der
       # Deploy sie nicht von der Seite entfernt.
+      # Diagnose: die Editionsnamen fehlen im Produktkatalog. Dieser Schritt
+      # sucht die passende Datei und schreibt das Ergebnis ins Protokoll.
+      - name: Editionsliste suchen
+        continue-on-error: true
+        run: node scripts/probe-cardmarket.mjs
+
       - name: Bisherige Preisdateien behalten
         if: steps.prices.outcome != 'success'
         run: |

@@ -112,6 +112,8 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
   }, [draft, matchedEntry, settings, overrides]);
 
   function applySuggestion(entry: PriceEntry) {
+    // Set (Abkürzung) und Sammlernummer kommen aus dem Vorschlag, damit beim
+    // Erfassen nichts abgetippt werden muss.
     patch({
       name: entry.name,
       set: entry.set,
@@ -290,9 +292,18 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
                     <span className="cell-main">{entry.name}</span>
                     <br />
                     <span className="cell-sub">
-                      {entry.set ?? 'Set unbekannt'}
-                      {entry.number ? ` · #${entry.number}` : ''}
+                      {/* Fehlt die Edition, ist die Cardmarket-Nummer immerhin
+                          ein eindeutiges Merkmal für gleichnamige Karten. */}
+                      {entry.set ? (
+                        <strong className="suggestion__set">{entry.set}</strong>
+                      ) : entry.cardmarketProductId ? (
+                        `Cardmarket #${entry.cardmarketProductId}`
+                      ) : (
+                        'Set unbekannt'
+                      )}
+                      {entry.number ? ` · Nr. ${entry.number}` : ''}
                       {entry.rarity ? ` · ${entry.rarity}` : ''}
+                      {entry.setName ? ` · ${entry.setName}` : ''}
                     </span>
                   </span>
                   <span className="suggestion__price">
@@ -488,14 +499,20 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
           </p>
         ) : (
           <dl className="kv">
-            <dt>Basis ({PRICE_BASIS_LABELS[preview.basis]})</dt>
+            <dt>
+              Basis ({PRICE_BASIS_LABELS[preview.basis]})
+              {settings.applyConditionFactors ? <span className="dim"> – gilt für NM</span> : null}
+            </dt>
             <dd>{formatMoney(preview.basePrice, settings)}</dd>
             <dt>Aufschlag</dt>
             <dd>+{preview.markupPercent} %</dd>
             {settings.applyConditionFactors ? (
               <>
                 <dt>Zustandsfaktor {draft.condition}</dt>
-                <dd>×{preview.conditionFactor.toFixed(2)}</dd>
+                <dd>
+                  ×{preview.conditionFactor.toFixed(2)}
+                  <span className="dim small"> ({settings.conditionFactors[draft.condition]} %)</span>
+                </dd>
               </>
             ) : null}
             <dt>Verkaufspreis pro Stück</dt>
@@ -506,6 +523,27 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
             <dd>{formatMoney(preview.sellPrice * draft.quantity, settings)}</dd>
           </dl>
         )}
+
+        {settings.applyConditionFactors && draft.condition !== 'NM' && preview.sellPrice !== null ? (
+          <p className="small dim" style={{ marginTop: 10, marginBottom: 0 }}>
+            Cardmarket führt je Karte nur einen Marktpreis, nicht einen je Zustand – die Basis bleibt deshalb
+            gleich. Der Zustand wirkt als Faktor darauf.
+          </p>
+        ) : null}
+
+        {/* Cardmarket-Preise beziehen sich auf Near-Mint-Ware. Ohne Zustands-
+            faktoren bekommt eine gespielte Karte denselben Preis wie eine
+            makellose – darauf sollte die App hinweisen, statt es zu verschweigen. */}
+        {!settings.applyConditionFactors && draft.condition !== 'NM' && draft.condition !== 'MT' ? (
+          <p className="notice notice--warn" style={{ marginTop: 10, marginBottom: 0 }}>
+            Der Zustand <strong>{draft.condition}</strong> wird derzeit nicht eingerechnet – die
+            Cardmarket-Preise gelten für Near Mint. Einschalten unter{' '}
+            <Link to="/regeln" onClick={onClose}>
+              Regeln → Zustandsfaktoren
+            </Link>{' '}
+            (Vorschlag: EX 85 %, GD 70 %, LP 60 %, PL 45 %, PO 30 %).
+          </p>
+        ) : null}
       </div>
     </Modal>
   );
