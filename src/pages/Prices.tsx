@@ -142,8 +142,8 @@ export default function Prices() {
                 <span className="badge badge--ok">bereit</span>
               </div>
               <p className="card__hint">
-                Der Wartungslauf hat am {formatDate(Date.parse(manifest.createdAt))} frische Cardmarket-Preise
-                bereitgestellt. Ein Tipp genügt – kein Datei-Download, kein Rechner nötig.
+                Stand der veröffentlichten Liste: {formatDate(Date.parse(manifest.createdAt))}. Die App holt
+                neue Preise beim Start von selbst – dieser Knopf ist nur nötig, wenn es sofort sein soll.
               </p>
               <button
                 type="button"
@@ -224,8 +224,8 @@ export default function Prices() {
             <div className="card__title">Woher bekomme ich die Datei?</div>
             <ol className="small muted" style={{ paddingLeft: 18, margin: 0, display: 'grid', gap: 6 }}>
               <li>
-                Am einfachsten: der Wartungslauf holt die Preise täglich und stellt sie neben der App bereit –
-                dann erscheint oben der Knopf „Preise jetzt aktualisieren".
+                Normalfall: Der Wartungslauf holt die Preise montags und stellt sie neben der App bereit. Die
+                App übernimmt sie beim nächsten Start automatisch, auf jedem Gerät.
               </li>
               <li>
                 Am Rechner: <span className="mono">npm run import:prices</span> ausführen. Das Skript legt die

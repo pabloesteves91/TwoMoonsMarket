@@ -74,7 +74,7 @@ angemeldeten Geräte denselben Bestand.
 | **Bestand** | Zustand (MT–PO) mit Preiswirkung, Sprache, Foil, Menge, Lagerort, Einkaufspreis, Fixpreis, Notiz, Foto; Serienerfassung, Suche, Filter, Sortierung; CSV-Export |
 | **Freigabe** | Vergleich Kärtchenpreis ↔ berechneter Preis, Änderungen einzeln bestätigen, Liste zum Umetikettieren als CSV |
 | **Verkäufe** | Verkauf buchen (Menge, Preis, Datum, Kanal), Umsatz/Gewinn/Marge, Umsatzverlauf je Woche, Meistverkauft, CSV-Export, Storno |
-| **Preise** | Preisabruf mit einem Tipp, Import per Drag & Drop (JSON/CSV), Suche in der Preisliste mit berechnetem Verkaufspreis |
+| **Preise** | Automatischer Abgleich mit der veröffentlichten Liste, Import per Drag & Drop (JSON/CSV), Suche in der Preisliste mit berechnetem Verkaufspreis |
 | **Regeln** | Getrennte Preisregeln für Foil und Non-Foil, Sonderregeln pro Set und pro Karte, optionale Zustandsfaktoren |
 | **Einstellungen** | Währung EUR/CHF, Spiele verwalten, Backup exportieren/einlesen, Demo-Daten, Zurücksetzen |
 
@@ -164,10 +164,15 @@ veröffentlicht sie zusammen mit der App unter `/prices/`. In der App erscheint
 dann unter **Preise** der Knopf **„Preise jetzt aktualisieren"** – ein Tipp
 genügt, auch auf dem Handy. Kein Datei-Download, kein Rechner.
 
-Der Abruf ersetzt die Liste des jeweiligen Spiels vollständig. Weil die
-Preislisten pro Gerät lokal liegen, muss der Knopf auf jedem Gerät einmal
-getippt werden – für Magic und Pokémon zusammen sind das knapp 200 000 Karten,
-rund 3 MB über die Leitung. Schlägt der Abruf bei Cardmarket fehl, bleiben die zuletzt
+Die App holt neue Preise **von selbst**: Beim Start prüft sie den Stand der
+veröffentlichten Liste und übernimmt sie, wenn er sich geändert hat. Während
+dessen ist die App benutzbar, ein Hinweis zeigt den Fortschritt. Der Knopf unter
+*Preise* bleibt für den Fall, dass es sofort sein soll.
+
+Die Liste liegt im Web; jedes Gerät hält davon nur eine Kopie zum schnellen
+Nachschlagen – bei knapp 200 000 Karten wären Einzelabfragen über das Netz beim
+Tippen zu langsam. Über die Leitung gehen dabei rund 3 MB, und nur dann, wenn
+tatsächlich ein neuer Stand veröffentlicht wurde. Schlägt der Abruf bei Cardmarket fehl, bleiben die zuletzt
 veröffentlichten Dateien stehen und der Grund steht im Actions-Protokoll.
 
 ### Variante B – am Rechner

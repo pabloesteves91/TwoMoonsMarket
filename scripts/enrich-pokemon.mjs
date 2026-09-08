@@ -24,6 +24,13 @@ const dir = argv[2] ?? 'dist/prices';
 const UA = 'TwoMoonsMarket/0.1 (+https://github.com/pabloesteves91/TwoMoonsMarket)';
 const API = 'https://api.pokemontcg.io/v2';
 
+/**
+ * Zeitgrenze für das Laden der Sets. Die Quelle antwortet zeitweise mit 500 oder
+ * 502; mit Wiederholungen kann das Laden aller Sets sonst beliebig lange dauern.
+ * Nach Ablauf wird mit den bis dahin geladenen Sets weitergearbeitet.
+ */
+const TIME_BUDGET_MS = Number(process.env.POKEMON_TIME_BUDGET_MS ?? 4 * 60 * 1000);
+
 /** Mindestanforderungen, damit eine Edition als erkannt gilt. */
 export const MATCH_MIN_CARDS = 5;
 export const MATCH_MIN_SHARE = 0.3;
@@ -69,14 +76,28 @@ export function matchExpansions(groups, setsByName) {
   return result;
 }
 
-async function getJson(url, attempt = 1) {
-  const response = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json' } });
-  if (response.status === 429 && attempt <= 3) {
-    await new Promise((resolve) => setTimeout(resolve, attempt * 2000));
-    return getJson(url, attempt + 1);
+/**
+ * Holt JSON und wiederholt bei Überlastung. Neben 429 (zu viele Anfragen)
+ * werden auch 5xx wiederholt: die API antwortet zeitweise mit 502.
+ */
+async function getJson(url, attempt = 1, maxAttempts = 3) {
+  let response;
+  try {
+    response = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json' } });
+  } catch (err) {
+    if (attempt < maxAttempts) {
+      await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+      return getJson(url, attempt + 1, maxAttempts);
+    }
+    throw err;
+  }
+
+  if ((response.status === 429 || response.status >= 500) && attempt < maxAttempts) {
+    await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+    return getJson(url, attempt + 1, maxAttempts);
   }
   if (!response.ok) {
-    throw new Error(`${url} → HTTP ${response.status}: ${(await response.text()).slice(0, 150)}`);
+    throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 120).replace(/\s+/g, ' ')}`);
   }
   return response.json();
 }
@@ -89,30 +110,54 @@ async function loadKnownSets() {
   const byName = new Map();
   let cards = 0;
 
+  // Ein einzelnes Set, das nicht antwortet, darf nicht den ganzen Lauf kippen –
+  // die übrigen Editionen lassen sich trotzdem zuordnen.
+  const failed = [];
+  const deadline = Date.now() + TIME_BUDGET_MS;
+  let stoppedEarly = false;
+
   for (const set of sets) {
-    let page = 1;
-    for (;;) {
-      const query = new URLSearchParams({
-        q: `set.id:${set.id}`,
-        pageSize: '250',
-        page: String(page),
-        select: 'id,name,number,rarity,set',
-      });
-      const body = await getJson(`${API}/cards?${query}`);
-      const list = body.data ?? [];
-      for (const card of list) {
-        const key = normalizeName(card.name);
-        const entry = { setId: set.id, number: card.number, rarity: card.rarity };
-        const existing = byName.get(key);
-        if (existing) existing.push(entry);
-        else byName.set(key, [entry]);
-        cards++;
+    if (Date.now() > deadline) {
+      stoppedEarly = true;
+      break;
+    }
+    try {
+      let page = 1;
+      for (;;) {
+        const query = new URLSearchParams({
+          q: `set.id:${set.id}`,
+          pageSize: '250',
+          page: String(page),
+        });
+        const body = await getJson(`${API}/cards?${query}`);
+        const list = body.data ?? [];
+        for (const card of list) {
+          const key = normalizeName(card.name);
+          const entry = { setId: set.id, number: card.number, rarity: card.rarity };
+          const existing = byName.get(key);
+          if (existing) existing.push(entry);
+          else byName.set(key, [entry]);
+          cards++;
+        }
+        if (list.length < 250) break;
+        page++;
       }
-      if (list.length < 250) break;
-      page++;
+    } catch (err) {
+      failed.push(`${set.id} (${err.message})`);
     }
   }
+
   console.log(`· pokemontcg.io: ${cards.toLocaleString('de-CH')} Karten geladen`);
+  if (failed.length) {
+    console.warn(`· ${failed.length} Sets nicht abrufbar, die ersten drei: ${failed.slice(0, 3).join(' | ')}`);
+  }
+  if (stoppedEarly) {
+    console.warn(
+      `· Zeitgrenze von ${(TIME_BUDGET_MS / 60000).toFixed(0)} Minuten erreicht – es wird mit den bereits ` +
+        'geladenen Sets zugeordnet. Der nächste Lauf holt den Rest.',
+    );
+  }
+  if (cards === 0) throw new Error('Kein einziges Set abrufbar – Zuordnung nicht möglich.');
   return { setsById, byName };
 }
 

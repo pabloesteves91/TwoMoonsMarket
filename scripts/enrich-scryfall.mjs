@@ -84,11 +84,37 @@ async function main() {
     throw new Error(`bulk-data → HTTP ${catalog.status}: ${hint}`);
   }
   const bulk = await catalog.json();
-  const entry = bulk.data?.find((item) => item.type === 'default_cards');
-  if (!entry?.download_uri) throw new Error('Keine Sammeldatei "default_cards" gefunden.');
-  console.log(`· Scryfall: ${entry.download_uri} (${(entry.size / 1e6).toFixed(0)} MB)`);
+  // Je nach Antwortform steht die Liste unter data oder direkt an der Wurzel
+  const list = Array.isArray(bulk) ? bulk : (bulk.data ?? bulk.bulk_data ?? []);
+  console.log(`· Scryfall: ${list.length} Sammeldateien angeboten: ${list.map((i) => i.type ?? i.name).join(', ')}`);
 
-  const response = await fetch(entry.download_uri, { headers: { 'User-Agent': UA } });
+  // "default_cards" bevorzugt: eine Zeile je Ausgabe. Sonst die nächstbeste,
+  // die alle Ausgaben enthält.
+  const entry =
+    list.find((item) => item.type === 'default_cards') ??
+    list.find((item) => item.type === 'unique_artwork') ??
+    list.find((item) => /default|unique/i.test(item.name ?? ''));
+  if (!entry) {
+    throw new Error(`Keine passende Sammeldatei gefunden. Angeboten: ${list.map((i) => i.type).join(', ')}`);
+  }
+
+  // Die Adresse der Datei steht je nach Fassung unter einem anderen Feld. Notfalls
+  // führt der Verweis auf den Einzeleintrag zum Ziel.
+  let download = entry.download_uri ?? entry.downloadUri ?? entry.download_url;
+  if (!download && entry.uri) {
+    console.log(`· Scryfall: Adresse fehlt im Listeneintrag (Felder: ${Object.keys(entry).join(', ')}), frage ${entry.uri} ab`);
+    const detail = await fetch(entry.uri, { headers: { 'User-Agent': UA, Accept: 'application/json' } });
+    if (detail.ok) {
+      const data = await detail.json();
+      download = data.download_uri ?? data.downloadUri ?? data.download_url;
+    }
+  }
+  if (!download) {
+    throw new Error(`Keine Download-Adresse gefunden. Felder des Eintrags: ${Object.keys(entry).join(', ')}`);
+  }
+  console.log(`· Scryfall: ${entry.type ?? entry.name} → ${download} (${((entry.size ?? 0) / 1e6).toFixed(0)} MB)`);
+
+  const response = await fetch(download, { headers: { 'User-Agent': UA } });
   if (!response.ok) throw new Error(`Sammeldatei → HTTP ${response.status}`);
 
   const byProduct = new Map();
