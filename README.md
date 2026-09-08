@@ -71,10 +71,46 @@ angemeldeten Geräte denselben Bestand.
 | Bereich | Inhalt |
 | --- | --- |
 | **Dashboard** | Kartenanzahl, Verkaufswert, Einkaufswert, Marge, wertvollste Positionen, Stand der Preisliste |
-| **Bestand** | Zustand (MT–PO), Sprache, Foil, Menge, Lagerort, Einkaufspreis, Fixpreis, Notiz, Foto; Suche, Filter, Sortierung; CSV-Export |
-| **Preise** | Import der Cardmarket-Preisliste (JSON/CSV, Drag & Drop), Suche in der Preisliste mit berechnetem Verkaufspreis |
+| **Bestand** | Zustand (MT–PO), Sprache, Foil, Menge, Lagerort, Einkaufspreis, Fixpreis, Notiz, Foto; Serienerfassung, Suche, Filter, Sortierung; CSV-Export |
+| **Freigabe** | Vergleich Kärtchenpreis ↔ berechneter Preis, Änderungen einzeln bestätigen, Liste zum Umetikettieren als CSV |
+| **Verkäufe** | Verkauf buchen (Menge, Preis, Datum, Kanal), Umsatz/Gewinn/Marge, Umsatzverlauf je Woche, Meistverkauft, CSV-Export, Storno |
+| **Preise** | Preisabruf mit einem Tipp, Import per Drag & Drop (JSON/CSV), Suche in der Preisliste mit berechnetem Verkaufspreis |
 | **Regeln** | Getrennte Preisregeln für Foil und Non-Foil, Sonderregeln pro Set und pro Karte, optionale Zustandsfaktoren |
 | **Einstellungen** | Währung EUR/CHF, Spiele verwalten, Backup exportieren/einlesen, Demo-Daten, Zurücksetzen |
+
+### Verkäufe
+
+Im Bestand bucht **„Verkauft"** einen Verkauf: Menge, Preis pro Stück (vorbelegt
+mit dem Kärtchenpreis), Datum und Kanal. Die Menge wird aus dem Bestand
+ausgebucht, der Verkauf bleibt mit Name, Set und Zustand erhalten – auch wenn der
+Bestandseintrag später verschwindet. Ein Storno bucht die Karten zurück.
+
+Unter *Verkäufe* stehen Umsatz, Gewinn und Marge für den gewählten Zeitraum, der
+Umsatzverlauf je Woche, die meistverkauften Karten und die Aufteilung nach Spiel.
+Der Gewinn wird nur aus Verkäufen mit erfasstem Einkaufspreis gerechnet.
+
+### Preise am Kärtchen: Freigabe statt Automatik
+
+Im Laden steht der Preis auf dem Kärtchen und ändert sich erst, wenn ihn jemand
+neu schreibt. Die App bildet das ab: jeder Bestandseintrag merkt sich den
+**zuletzt freigegebenen Preis**, und unter *Freigabe* stehen nur die Karten, bei
+denen der berechnete Preis inzwischen abweicht – mit alt → neu, Differenz in
+Prozent und einer CSV-Liste zum Mitnehmen an die Vitrine. Erst das Bestätigen
+setzt den neuen Kärtchenpreis.
+
+Damit nicht jede Kleinigkeit auf der Liste landet, müssen **beide** Schwellen aus
+den Einstellungen erreicht sein (Standard 0.20 EUR **und** 5 %): ein paar Rappen
+auf einer teuren Karte sind ebenso wenig ein Grund zum Umetikettieren wie ein
+Prozentsprung auf einer Zehn-Rappen-Karte.
+
+Frisch erfasste Karten bekommen den aktuell berechneten Preis gleich als
+Kärtchenpreis – sie landen also nicht sofort auf der Freigabeliste.
+
+### Grössere Mengen erfassen
+
+Im Erfassungsdialog speichert **„+ Nächste"** und hält die Maske offen: Spiel,
+Set, Zustand, Sprache, Foil und Lagerort bleiben stehen, der Name ist leer und
+fokussiert. Beim Durcharbeiten einer Kiste ändert sich meist nur der Name.
 
 ### Preisberechnung
 
@@ -113,14 +149,16 @@ Cardmarket bietet keine offene API, die Preisliste kommt deshalb als Datei in di
 
 ### Variante A – vollautomatisch (empfohlen)
 
-Der GitHub-Actions-Workflow `Deploy` läuft täglich, lädt Preisliste und
+Der GitHub-Actions-Workflow `Deploy` läuft jeden Montagmorgen, lädt Preisliste und
 Produktkatalog, führt beide zu einer schlanken Datei je Spiel zusammen und
 veröffentlicht sie zusammen mit der App unter `/prices/`. In der App erscheint
 dann unter **Preise** der Knopf **„Preise jetzt aktualisieren"** – ein Tipp
 genügt, auch auf dem Handy. Kein Datei-Download, kein Rechner.
 
-Weil die Preislisten pro Gerät lokal liegen, muss der Knopf auf jedem Gerät
-einmal getippt werden. Schlägt der Abruf bei Cardmarket fehl, bleiben die zuletzt
+Der Abruf ersetzt die Liste des jeweiligen Spiels vollständig. Weil die
+Preislisten pro Gerät lokal liegen, muss der Knopf auf jedem Gerät einmal
+getippt werden – für Magic und Pokémon zusammen sind das knapp 200 000 Karten,
+rund 3 MB über die Leitung. Schlägt der Abruf bei Cardmarket fehl, bleiben die zuletzt
 veröffentlichten Dateien stehen und der Grund steht im Actions-Protokoll.
 
 ### Variante B – am Rechner
@@ -192,6 +230,14 @@ Im lokalen Modus gilt weiterhin: die Daten liegen nur in diesem einen Browser,
 also regelmässig *Einstellungen → Backup exportieren*. Der Umzug in die Cloud
 läuft über *Backup exportieren* → anmelden → *Backup einlesen*.
 
+Die Suche findet Karten über den Wortanfang: „bolt" führt zu „Lightning Bolt",
+„light bol" ebenfalls. Eine Suche nach Wortteilen in der Mitte („ightn") gibt es
+nicht – bei knapp 200 000 Karten wäre das auf dem Handy zu langsam.
+
+Das Backup enthält Bestand, Regeln, Fotos und Einstellungen, aber **keine
+Preislisten** – die sind mit einem Tipp neu abgerufen und würden die Datei nur
+um zweistellige Megabyte aufblähen.
+
 Technisch liegt der gesamte Datenzugriff hinter dem Interface `Repository`
 (`src/db/repository.ts`); `localRepository` und `firebaseRepository` erfüllen es
 gleichermassen, die Oberfläche kennt den Unterschied nicht.
@@ -210,6 +256,7 @@ src/lib/cardmarket.ts       Import-Parser (JSON/CSV, Spaltenerkennung)
 src/lib/cloudPrices.ts      Preisabruf aus dem Web (/prices/index.json)
 src/lib/exporters.ts        CSV-Export-Formate
 src/db/                     Repository-Interface + IndexedDB-Implementierung
+                            (Schema v2 ist auf ~200 000 Preis-Datensätze ausgelegt)
 src/firebase/               Firestore-Repository, Login-Gate, Konfiguration
 src/pages/                  Dashboard, Bestand, Preise, Regeln, Einstellungen
 src/components/             Modal, Bestandsformular, Regel-Editor, Foto-Upload

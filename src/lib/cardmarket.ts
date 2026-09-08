@@ -147,7 +147,12 @@ function parseJsonPrices(text: string, gameId: GameId, source: string): ImportRe
 
   const entries: PriceEntry[] = [];
   let skipped = 0;
-  for (const row of rows) {
+  // Über den Index statt über den Iterator: so lässt sich jede Rohzeile nach der
+  // Umwandlung freigeben. Bei Dateien mit >100 000 Zeilen halbiert das den
+  // Spitzenspeicher, weil Rohdaten und Ergebnis nicht vollständig nebeneinander
+  // liegen müssen.
+  for (let index = 0; index < rows.length; index++) {
+    const row = rows[index];
     const mapped: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(row)) {
       const norm = normalizeHeader(key);
@@ -161,6 +166,7 @@ function parseJsonPrices(text: string, gameId: GameId, source: string): ImportRe
     const entry = makeEntry(gameId, mapped, source);
     if (entry) entries.push(entry);
     else skipped++;
+    rows[index] = undefined as unknown as Record<string, unknown>;
   }
 
   if (entries.length && entries.every((e) => e.name.startsWith('Produkt #'))) {
@@ -183,12 +189,13 @@ function parseCsvPrices(text: string, gameId: GameId, source: string): ImportRes
 
   const entries: PriceEntry[] = [];
   let skipped = 0;
-  for (const row of rows) {
+  for (let line = 0; line < rows.length; line++) {
     const raw: Record<string, unknown> = {};
-    for (const [field, index] of Object.entries(mapping)) raw[field] = row[index];
+    for (const [field, index] of Object.entries(mapping)) raw[field] = rows[line][index];
     const entry = makeEntry(gameId, raw, source);
     if (entry) entries.push(entry);
     else skipped++;
+    rows[line] = undefined as unknown as string[];
   }
 
   const readable: Record<string, string> = {};

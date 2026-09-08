@@ -101,6 +101,33 @@ export function buildNameKey(gameId: string, name: string): string {
   return `${gameId}|${normalize(name)}`;
 }
 
+/** Zerlegt einen Kartennamen in normalisierte Suchwörter (ohne Dubletten). */
+export function buildWords(name: string): string[] {
+  return [...new Set(normalize(name).split(' ').filter((word) => word.length > 0))];
+}
+
+/** Länge des Blockschlüssels, mit dem die Preisliste aufgeteilt wird. */
+export const BUCKET_LENGTH = 3;
+
+/** Blockschlüssel eines Wortes, z.B. "lightning" -> "lig", "ex" -> "ex_". */
+export function bucketOf(word: string): string {
+  return word.slice(0, BUCKET_LENGTH).padEnd(BUCKET_LENGTH, '_');
+}
+
+/**
+ * Alle Blöcke, in denen ein Kartenname zu finden sein soll: einer je Wort.
+ * Dadurch findet die Suche nach "bolt" auch "Lightning Bolt".
+ */
+export function bucketsOf(name: string): string[] {
+  const words = buildWords(name);
+  return words.length > 0 ? [...new Set(words.map(bucketOf))] : ['___'];
+}
+
+/** Der Block, in dem ein Eintrag zuverlässig liegt (erstes Wort des Namens). */
+export function primaryBucketOf(name: string): string {
+  return bucketsOf(name)[0];
+}
+
 export interface PriceContext {
   settings: Settings;
   /** RuleOverrides nach id */
@@ -257,4 +284,6 @@ export const DEFAULT_SETTINGS: Settings = {
   currency: 'EUR',
   eurToChf: 0.95,
   companyName: 'TwoMoons AG, Dübendorf',
+  approvalMinDelta: 0.2,
+  approvalMinPercent: 5,
 };

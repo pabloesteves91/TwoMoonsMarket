@@ -83,6 +83,27 @@ export interface PriceEntry {
   source?: string;
 }
 
+/**
+ * Ein Block der Preisliste: alle Einträge, deren Name ein Wort mit diesem
+ * Anfang enthält. Die Preislisten werden blockweise gespeichert, weil
+ * hunderttausende Einzelzeilen in IndexedDB zu langsam zu schreiben sind.
+ */
+export interface PriceBucket {
+  /** `${gameId}:${bucketKey}` */
+  id: string;
+  gameId: GameId;
+  bucketKey: string;
+  entries: PriceEntry[];
+}
+
+/** Kennzahlen je Spiel, damit Anzahl und Stand ohne Vollzugriff bekannt sind. */
+export interface PriceMeta {
+  gameId: GameId;
+  count: number;
+  updatedAt: number;
+  source?: string;
+}
+
 /** Verfügbare Preisbasen für die Aufschlagsregel. */
 export const PRICE_BASES = [
   'trend',
@@ -162,6 +183,10 @@ export interface Settings {
   /** Manuell gepflegter Kurs 1 EUR = x CHF */
   eurToChf: number;
   companyName: string;
+  /** Ab welcher Abweichung eine Karte zur Freigabe vorgeschlagen wird (EUR) */
+  approvalMinDelta: number;
+  /** …und ab welcher prozentualen Abweichung. Beide Grenzen müssen erreicht sein. */
+  approvalMinPercent: number;
   /** Zuletzt genutzte Spielauswahl in der Bestandsansicht */
   lastGameFilter?: string;
 }
@@ -181,6 +206,13 @@ export interface InventoryItem {
   purchasePrice?: number;
   /** Fixpreis pro Stück in EUR – überschreibt jede Regel */
   fixedPrice?: number;
+  /**
+   * Zuletzt freigegebener Verkaufspreis pro Stück in EUR – also der Preis, der
+   * am Kärtchen im Laden steht. Der berechnete Preis ändert sich mit jedem
+   * Cardmarket-Import; dieser hier erst, wenn jemand die Änderung übernimmt.
+   */
+  approvedPrice?: number;
+  approvedAt?: number;
   /** Regel-Überschreibung nur für diesen Eintrag */
   ruleOverride?: PricingRuleOverride;
   /** Verknüpfung zu einem Preis-Datensatz (`PriceEntry.id`) */
@@ -192,6 +224,41 @@ export interface InventoryItem {
   createdAt: number;
   updatedAt: number;
 }
+
+/**
+ * Ein Verkauf. Bewusst mit Kopie von Name, Set und Zustand: der Bestandseintrag
+ * kann später verschwinden, die Verkaufshistorie soll trotzdem lesbar bleiben.
+ */
+export interface Sale {
+  id: string;
+  /** Verknüpfung zum Bestandseintrag, sofern er noch existiert */
+  itemId?: string;
+  gameId: GameId;
+  name: string;
+  set?: string;
+  condition: Condition;
+  language: Language;
+  foil: boolean;
+  quantity: number;
+  /** Verkaufspreis pro Stück in EUR */
+  unitPrice: number;
+  /** Einkaufspreis pro Stück in EUR zum Zeitpunkt des Verkaufs */
+  purchasePrice?: number;
+  soldAt: number;
+  channel: SaleChannel;
+  note?: string;
+  createdAt: number;
+}
+
+export const SALE_CHANNELS = ['laden', 'event', 'online', 'sonstiges'] as const;
+export type SaleChannel = (typeof SALE_CHANNELS)[number];
+
+export const SALE_CHANNEL_LABELS: Record<SaleChannel, string> = {
+  laden: 'Laden',
+  event: 'Event / Turnier',
+  online: 'Online',
+  sonstiges: 'Sonstiges',
+};
 
 export interface Photo {
   id: string;

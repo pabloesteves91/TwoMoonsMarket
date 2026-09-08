@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Modal from './Modal';
 import PhotoInput from './PhotoInput';
 import { repo } from '../db';
-import { formatMoney, uid } from '../lib/format';
+import { formatMoney, formatNumber, uid } from '../lib/format';
 import {
   PRICE_BASES,
   PRICE_BASIS_LABELS,
@@ -22,6 +23,18 @@ interface ItemFormProps {
   onClose: () => void;
 }
 
+/** Felder, die beim Erfassen einer Serie gleich bleiben. */
+function carryOver(item: InventoryItem): Partial<InventoryItem> {
+  return {
+    gameId: item.gameId,
+    set: item.set,
+    condition: item.condition,
+    language: item.language,
+    foil: item.foil,
+    location: item.location,
+  };
+}
+
 function emptyItem(gameId: string): InventoryItem {
   return {
     id: uid('item_'),
@@ -37,7 +50,7 @@ function emptyItem(gameId: string): InventoryItem {
 }
 
 export default function ItemForm({ item, onClose }: ItemFormProps) {
-  const { games, settings, overrides, saveItem, deleteItem } = useStore();
+  const { games, settings, overrides, saveItem, deleteItem, priceStats } = useStore();
   const [draft, setDraft] = useState<InventoryItem>(item ?? emptyItem(games[0]?.id ?? 'mtg'));
   const [suggestions, setSuggestions] = useState<PriceEntry[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -45,7 +58,17 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
   const [useOverride, setUseOverride] = useState(Boolean(item?.ruleOverride));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  /** Zähler und Rückmeldung für die Serienerfassung */
+  const [savedCount, setSavedCount] = useState(0);
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [searching, setSearching] = useState(false);
   const searchTimer = useRef<number>();
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  const game = games.find((entry) => entry.id === draft.gameId);
+  /** Ohne geladene Preisliste kann die App weder vorschlagen noch rechnen. */
+  const priceCount = priceStats.find((stat) => stat.gameId === draft.gameId)?.count ?? 0;
+  const hasPriceList = priceCount > 0;
 
   const patch = (changes: Partial<InventoryItem>) => setDraft((prev) => ({ ...prev, ...changes }));
 
@@ -56,8 +79,12 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
       setSuggestions([]);
       return;
     }
+    setSearching(true);
     searchTimer.current = window.setTimeout(() => {
-      void repo.searchPriceEntries(draft.name, draft.gameId, 12).then(setSuggestions);
+      void repo.searchPriceEntries(draft.name, draft.gameId, 12).then((hits) => {
+        setSuggestions(hits);
+        setSearching(false);
+      });
     }, 220);
     return () => window.clearTimeout(searchTimer.current);
   }, [draft.name, draft.gameId]);
@@ -95,7 +122,12 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
     setShowSuggestions(false);
   }
 
-  async function handleSave() {
+  /**
+   * Speichert den Eintrag. `andNext` hält die Maske für die nächste Karte offen
+   * und behält Spiel, Set, Zustand, Sprache, Foil und Lagerort bei – beim
+   * Erfassen einer Kiste ändert sich meist nur der Name.
+   */
+  async function handleSave(andNext = false) {
     if (!draft.name.trim()) {
       setError('Bitte einen Kartennamen eingeben.');
       return;
@@ -106,14 +138,32 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
     }
     setSaving(true);
     try {
+      const name = draft.name.trim();
       await saveItem({
         ...draft,
-        name: draft.name.trim(),
+        name,
         set: draft.set?.trim() || undefined,
         ruleOverride: useOverride ? draft.ruleOverride ?? {} : undefined,
+        // Neu erfasste Karten bekommen ein Kärtchen mit dem aktuellen Preis –
+        // sie sollen nicht sofort in der Preisfreigabe auftauchen.
+        approvedPrice: draft.approvedPrice ?? preview.sellPrice ?? undefined,
+        approvedAt: draft.approvedPrice ? draft.approvedAt : preview.sellPrice ? Date.now() : undefined,
         updatedAt: Date.now(),
       });
-      onClose();
+
+      if (!andNext) {
+        onClose();
+        return;
+      }
+
+      setSavedCount((count) => count + 1);
+      setLastSaved(name);
+      setError(null);
+      setDraft({ ...emptyItem(draft.gameId), ...carryOver(draft), id: uid('item_') });
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setSaving(false);
+      nameRef.current?.focus();
     } catch (err) {
       setError((err as Error).message);
       setSaving(false);
@@ -122,7 +172,13 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
 
   return (
     <Modal
-      title={item ? 'Eintrag bearbeiten' : 'Karte zum Bestand hinzufügen'}
+      title={
+        item
+          ? 'Eintrag bearbeiten'
+          : savedCount > 0
+            ? `Karte erfassen (${savedCount} gespeichert)`
+            : 'Karte zum Bestand hinzufügen'
+      }
       onClose={onClose}
       footer={
         <>
@@ -139,8 +195,19 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
           ) : null}
           <div className="spacer" />
           <button type="button" className="btn" onClick={onClose}>
-            Abbrechen
+            {savedCount > 0 ? 'Fertig' : 'Abbrechen'}
           </button>
+          {!item ? (
+            <button
+              type="button"
+              className="btn"
+              disabled={saving}
+              onClick={() => void handleSave(true)}
+              title="Speichern und gleich die nächste Karte erfassen"
+            >
+              + Nächste
+            </button>
+          ) : null}
           <button type="button" className="btn btn--primary" disabled={saving} onClick={() => void handleSave()}>
             {saving ? 'Speichert …' : 'Speichern'}
           </button>
@@ -148,6 +215,11 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
       }
     >
       {error ? <p className="notice notice--error">{error}</p> : null}
+      {lastSaved && !error ? (
+        <p className="notice notice--ok">
+          „{lastSaved}" gespeichert. Set, Zustand, Sprache und Lagerort bleiben für die nächste Karte stehen.
+        </p>
+      ) : null}
 
       <div className="field-row">
         <div>
@@ -176,6 +248,8 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
         <label htmlFor="name">Kartenname</label>
         <input
           id="name"
+          ref={nameRef}
+          autoFocus
           value={draft.name}
           autoComplete="off"
           placeholder="z.B. Lightning Bolt"
@@ -184,7 +258,29 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
             setShowSuggestions(true);
           }}
           onFocus={() => setShowSuggestions(true)}
+          onBlur={() => window.setTimeout(() => setShowSuggestions(false), 150)}
         />
+        {!hasPriceList ? (
+          <p className="notice notice--warn" style={{ marginTop: 6 }}>
+            Für {game?.name ?? 'dieses Spiel'} ist noch keine Preisliste geladen – deshalb gibt es weder
+            Vorschläge noch einen berechneten Preis.{' '}
+            <Link to="/preise" onClick={onClose}>
+              Jetzt laden
+            </Link>{' '}
+            (dauert etwa eine Viertelminute, danach schlägt die App beim Tippen Karten vor).
+          </p>
+        ) : draft.name.trim().length >= 2 && !searching && suggestions.length === 0 ? (
+          <p className="small dim" style={{ marginTop: 6 }}>
+            Keine Karte mit diesem Namen in der Preisliste von {game?.short ?? game?.name}. Die Suche geht über
+            Wortanfänge – „aang" findet „Aang, Swift Nomad". Stimmt das Spiel oben?
+          </p>
+        ) : hasPriceList && draft.name.trim().length < 2 ? (
+          <p className="small dim" style={{ marginTop: 6 }}>
+            Ab zwei Buchstaben schlägt die App Karten aus {formatNumber(priceCount)} Einträgen vor – Auswählen
+            füllt Set und Preis automatisch.
+          </p>
+        ) : null}
+
         {showSuggestions && suggestions.length > 0 ? (
           <ul
             className="list-reset card card--pad-sm"
@@ -202,7 +298,13 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
                     {entry.name}
                     {entry.set ? <span className="cell-sub"> · {entry.set}</span> : null}
                   </span>
-                  <span className="dim small">{formatMoney(entry.trend ?? entry.avg ?? null, settings)}</span>
+                  <span className="dim small">
+                    {entry.trend ?? entry.avg ?? entry.low ?? entry.foilTrend ? (
+                      formatMoney(entry.trend ?? entry.avg ?? entry.low ?? null, settings)
+                    ) : (
+                      <span className="badge badge--warn">ohne Preis</span>
+                    )}
+                  </span>
                 </button>
               </li>
             ))}
@@ -366,7 +468,26 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
         </div>
         {preview.sellPrice === null ? (
           <p className="notice notice--warn" style={{ margin: 0 }}>
-            {preview.reason ?? 'Kein Preis berechenbar.'}
+            {!hasPriceList ? (
+              <>
+                Noch keine Preisliste für {game?.name ?? 'dieses Spiel'} geladen.{' '}
+                <Link to="/preise" onClick={onClose}>
+                  Unter „Preise" aktualisieren
+                </Link>{' '}
+                – danach rechnet die App den Verkaufspreis. Bis dahin könnt ihr oben einen Fixpreis eintragen.
+              </>
+            ) : matchedEntry ? (
+              <>
+                Cardmarket führt für „{matchedEntry.name}" derzeit keinen Preis
+                {draft.foil ? ' in Foil' : ''} – das kommt bei selten gehandelten Karten vor. Bitte oben einen
+                Fixpreis eintragen.
+              </>
+            ) : (
+              <>
+                Diese Karte steht nicht in der Preisliste. Tipp: den Namen aus der Vorschlagsliste wählen, dann
+                passt die Schreibweise. Alternativ oben einen Fixpreis eintragen.
+              </>
+            )}
           </p>
         ) : (
           <dl className="kv">

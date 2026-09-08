@@ -1,9 +1,9 @@
-import type { Game, PriceEntry, Settings } from '../types';
+import type { Game, PriceBucket, PriceEntry, Settings } from '../types';
 import { DEFAULT_SETTINGS } from '../lib/pricing';
 import { mergeEntries } from '../lib/cardmarket';
 import { db } from './schema';
-import { buildMatchKey, buildNameKey } from '../lib/pricing';
-import type { BackupPayload, PriceStats, Repository } from './repository';
+import { buildMatchKey, buildNameKey, bucketsOf, normalize, primaryBucketOf } from '../lib/pricing';
+import type { BackupPayload, PriceStats, Repository, UpsertOptions } from './repository';
 
 export const DEFAULT_GAMES: Game[] = [
   {
@@ -26,10 +26,48 @@ export const DEFAULT_GAMES: Game[] = [
   },
 ];
 
-/** Liest einen beliebigen Preis-Datensatz eines Spiels – für den Zeitstempel des letzten Imports. */
-export async function getPriceSample(gameId: string): Promise<PriceEntry | undefined> {
-  const sample = await db.prices.where('gameId').equals(gameId).limit(1).toArray();
-  return sample[0];
+const bucketId = (gameId: string, bucketKey: string) => `${gameId}:${bucketKey}`;
+
+/**
+ * Kennzahlen der lokalen Preislisten je Spiel. Auch im Firestore-Betrieb liegen
+ * die Preise lokal, dort kommt die Spieleliste aber aus der Cloud – deshalb ist
+ * das hier von der lokalen Spieletabelle unabhängig.
+ */
+export async function getPriceMetaMap(): Promise<Map<string, { count: number; updatedAt: number }>> {
+  const meta = await db.priceMeta.toArray();
+  return new Map(meta.map((entry) => [entry.gameId, { count: entry.count, updatedAt: entry.updatedAt }]));
+}
+
+/** Liest die Blöcke zu einer Menge von Blockschlüsseln. */
+async function readBuckets(gameId: string, keys: Iterable<string>): Promise<PriceEntry[]> {
+  const ids = [...new Set([...keys].map((key) => bucketId(gameId, key)))];
+  const buckets = await db.priceBuckets.bulkGet(ids);
+  const entries: PriceEntry[] = [];
+  for (const bucket of buckets) if (bucket) entries.push(...bucket.entries);
+  return entries;
+}
+
+/** Verteilt Einträge auf ihre Blöcke – ein Eintrag liegt in jedem Block seiner Wörter. */
+function groupIntoBuckets(entries: PriceEntry[]): Map<string, PriceEntry[]> {
+  const buckets = new Map<string, PriceEntry[]>();
+  for (const entry of entries) {
+    for (const key of bucketsOf(entry.name)) {
+      const list = buckets.get(key);
+      if (list) list.push(entry);
+      else buckets.set(key, [entry]);
+    }
+  }
+  return buckets;
+}
+
+async function writeBuckets(gameId: string, buckets: Map<string, PriceEntry[]>): Promise<void> {
+  const rows: PriceBucket[] = [...buckets].map(([bucketKey, entries]) => ({
+    id: bucketId(gameId, bucketKey),
+    gameId,
+    bucketKey,
+    entries,
+  }));
+  for (let i = 0; i < rows.length; i += 200) await db.priceBuckets.bulkPut(rows.slice(i, i + 200));
 }
 
 async function ensureSeed(): Promise<void> {
@@ -51,9 +89,10 @@ export const localRepository: Repository = {
     await db.games.put(game);
   },
   async deleteGame(id) {
-    await db.transaction('rw', db.games, db.prices, db.items, async () => {
+    await db.transaction('rw', [db.games, db.priceBuckets, db.priceMeta, db.items], async () => {
       await db.games.delete(id);
-      await db.prices.where('gameId').equals(id).delete();
+      await db.priceBuckets.where('gameId').equals(id).delete();
+      await db.priceMeta.delete(id);
       await db.items.where('gameId').equals(id).delete();
     });
   },
@@ -69,97 +108,149 @@ export const localRepository: Repository = {
   },
 
   async getPriceEntries(gameId) {
-    return gameId ? db.prices.where('gameId').equals(gameId).toArray() : db.prices.toArray();
+    const buckets = gameId
+      ? await db.priceBuckets.where('gameId').equals(gameId).toArray()
+      : await db.priceBuckets.toArray();
+    // Ein Eintrag liegt in mehreren Blöcken – für den Export wird entdoppelt
+    const unique = new Map<string, PriceEntry>();
+    for (const bucket of buckets) for (const entry of bucket.entries) unique.set(entry.id, entry);
+    return [...unique.values()];
   },
-  async countPriceEntries(gameId) {
-    return gameId ? db.prices.where('gameId').equals(gameId).count() : db.prices.count();
-  },
-  async upsertPriceEntries(entries) {
-    if (entries.length === 0) return 0;
-    let written = 0;
-    // In Blöcken schreiben, damit auch grosse Preislisten (>100k Zeilen) laufen
-    const chunkSize = 2000;
-    for (let i = 0; i < entries.length; i += chunkSize) {
-      const chunk = entries.slice(i, i + chunkSize);
-      await db.transaction('rw', db.prices, async () => {
-        const existing = await db.prices.bulkGet(chunk.map((e) => e.id));
-        // Derselbe Karte kann aus zwei Quellen kommen (mit und ohne Cardmarket-ID).
-        // Über den matchKey wird der bestehende Datensatz gefunden und ersetzt,
-        // statt eine zweite Zeile für dieselbe Karte anzulegen.
-        const byMatchKey = new Map<string, PriceEntry>();
-        const keys = chunk.map((e) => e.matchKey);
-        for (const entry of await db.prices.where('matchKey').anyOf(keys).toArray()) {
-          if (!byMatchKey.has(entry.matchKey)) byMatchKey.set(entry.matchKey, entry);
-        }
 
-        const merged: PriceEntry[] = [];
-        const obsolete: string[] = [];
-        chunk.forEach((entry, index) => {
-          const sameId = existing[index] ?? undefined;
-          const sameKey = byMatchKey.get(entry.matchKey);
-          if (!sameId && sameKey && sameKey.id !== entry.id) {
-            merged.push(mergeEntries(sameKey, entry));
-            obsolete.push(sameKey.id);
-          } else {
-            merged.push(mergeEntries(sameId, entry));
-          }
+  async countPriceEntries(gameId) {
+    if (gameId) return (await db.priceMeta.get(gameId))?.count ?? 0;
+    const all = await db.priceMeta.toArray();
+    return all.reduce((sum, meta) => sum + meta.count, 0);
+  },
+
+  async upsertPriceEntries(entries, options: UpsertOptions = {}) {
+    if (entries.length === 0) return 0;
+
+    // Nach Spiel trennen, damit Kennzahlen und Ersetzen je Spiel greifen
+    const perGame = new Map<string, PriceEntry[]>();
+    for (const entry of entries) {
+      const list = perGame.get(entry.gameId);
+      if (list) list.push(entry);
+      else perGame.set(entry.gameId, [entry]);
+    }
+
+    let written = 0;
+    for (const [gameId, list] of perGame) {
+      const incoming = groupIntoBuckets(list);
+
+      if (options.mode !== 'replace') {
+        // Zusammenführen: nur die betroffenen Blöcke lesen und je Eintrag mischen
+        const existing = await db.priceBuckets.bulkGet([...incoming.keys()].map((key) => bucketId(gameId, key)));
+        [...incoming.keys()].forEach((key, index) => {
+          const previous = existing[index];
+          if (!previous) return;
+          const merged = new Map(previous.entries.map((entry) => [entry.id, entry]));
+          for (const entry of incoming.get(key)!) merged.set(entry.id, mergeEntries(merged.get(entry.id), entry));
+          incoming.set(key, [...merged.values()]);
         });
-        if (obsolete.length) await db.prices.bulkDelete(obsolete);
-        await db.prices.bulkPut(merged);
+      } else {
+        await db.priceBuckets.where('gameId').equals(gameId).delete();
+      }
+
+      await writeBuckets(gameId, incoming);
+
+      const unique = new Set<string>();
+      for (const bucketEntries of incoming.values()) for (const entry of bucketEntries) unique.add(entry.id);
+      const previous = options.mode === 'replace' ? 0 : ((await db.priceMeta.get(gameId))?.count ?? 0);
+      await db.priceMeta.put({
+        gameId,
+        count: Math.max(previous, unique.size),
+        updatedAt: Date.now(),
+        source: list[0]?.source,
       });
-      written += chunk.length;
+      written += list.length;
     }
     return written;
   },
+
   async clearPriceEntries(gameId) {
-    if (gameId) await db.prices.where('gameId').equals(gameId).delete();
-    else await db.prices.clear();
+    if (gameId) {
+      await db.priceBuckets.where('gameId').equals(gameId).delete();
+      await db.priceMeta.delete(gameId);
+    } else {
+      await db.priceBuckets.clear();
+      await db.priceMeta.clear();
+    }
   },
+
   async searchPriceEntries(query, gameId, limit = 30) {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
-    const collection = gameId ? db.prices.where('gameId').equals(gameId) : db.prices.toCollection();
-    const results: PriceEntry[] = [];
-    await collection.until(() => results.length >= limit).each((entry) => {
-      if (results.length >= limit) return;
-      if (entry.name.toLowerCase().includes(q)) results.push(entry);
-    });
-    return results.sort((a, b) => a.name.localeCompare(b.name)).slice(0, limit);
+    const normalized = normalize(query);
+    if (!normalized) return [];
+    const tokens = normalized.split(' ').filter((token) => token.length > 0);
+    const games = gameId ? [gameId] : (await db.games.toArray()).map((game) => game.id);
+
+    // Einträge liegen im Block jedes ihrer Wörter. Als Einstieg dient das
+    // längste Wort der Eingabe – es ist am trennschärfsten.
+    const probe = tokens.reduce((longest, token) => (token.length > longest.length ? token : longest));
+    const prefix = probe.slice(0, 3);
+
+    const matches = (name: string): boolean => {
+      const normalizedName = normalize(name);
+      if (normalizedName.startsWith(normalized)) return true;
+      const words = normalizedName.split(' ');
+      return tokens.every((token) => words.some((word) => word.startsWith(token)));
+    };
+
+    const found = new Map<string, PriceEntry>();
+    for (const game of games) {
+      const buckets =
+        prefix.length >= 3
+          ? await db.priceBuckets.bulkGet([bucketId(game, prefix)])
+          : await db.priceBuckets.where('id').startsWith(bucketId(game, prefix)).toArray();
+
+      for (const bucket of buckets) {
+        if (!bucket) continue;
+        for (const entry of bucket.entries) {
+          if (found.has(entry.id) || !matches(entry.name)) continue;
+          found.set(entry.id, entry);
+          if (found.size >= limit * 8) break;
+        }
+      }
+    }
+
+    return [...found.values()]
+      .sort((a, b) => a.name.length - b.name.length || a.name.localeCompare(b.name))
+      .slice(0, limit);
   },
 
   async resolveEntriesForItems(items) {
     if (items.length === 0) return [];
-    const ids = new Set<string>();
-    const matchKeys = new Set<string>();
-    const nameKeys = new Set<string>();
+    const perGame = new Map<string, Set<string>>();
     for (const item of items) {
-      if (item.priceEntryId) ids.add(item.priceEntryId);
-      if (item.cardmarketProductId) ids.add(`${item.gameId}:${item.cardmarketProductId}`);
-      matchKeys.add(buildMatchKey(item.gameId, item.name, item.set));
-      matchKeys.add(buildMatchKey(item.gameId, item.name));
-      nameKeys.add(buildNameKey(item.gameId, item.name));
+      const keys = perGame.get(item.gameId) ?? new Set<string>();
+      keys.add(primaryBucketOf(item.name));
+      perGame.set(item.gameId, keys);
     }
-    const [byId, byMatch, byName] = await Promise.all([
-      db.prices.bulkGet([...ids]),
-      db.prices.where('matchKey').anyOf([...matchKeys]).toArray(),
-      db.prices.where('nameKey').anyOf([...nameKeys]).limit(5000).toArray(),
-    ]);
+
+    const wanted = new Set<string>();
+    for (const item of items) {
+      wanted.add(buildMatchKey(item.gameId, item.name, item.set));
+      wanted.add(buildMatchKey(item.gameId, item.name));
+      wanted.add(buildNameKey(item.gameId, item.name));
+    }
+
     const found = new Map<string, PriceEntry>();
-    for (const entry of [...byId, ...byMatch, ...byName]) if (entry) found.set(entry.id, entry);
+    for (const [gameId, keys] of perGame) {
+      for (const entry of await readBuckets(gameId, keys)) {
+        if (wanted.has(entry.matchKey) || wanted.has(entry.nameKey)) found.set(entry.id, entry);
+      }
+    }
     return [...found.values()];
   },
 
   async getPriceStats(): Promise<PriceStats[]> {
     const games = await db.games.toArray();
-    const stats: PriceStats[] = [];
-    for (const game of games) {
-      const collection = db.prices.where('gameId').equals(game.id);
-      const count = await collection.count();
-      let updatedAt: number | null = null;
-      if (count > 0) updatedAt = (await getPriceSample(game.id))?.updatedAt ?? null;
-      stats.push({ gameId: game.id, count, updatedAt });
-    }
-    return stats;
+    const meta = await getPriceMetaMap();
+    return games.map((game) => ({
+      gameId: game.id,
+      count: meta.get(game.id)?.count ?? 0,
+      updatedAt: meta.get(game.id)?.updatedAt ?? null,
+    }));
   },
 
   async getItems() {
@@ -172,6 +263,17 @@ export const localRepository: Repository = {
     const item = await db.items.get(id);
     await db.items.delete(id);
     if (item?.photoId) await db.photos.delete(item.photoId);
+  },
+
+  async getSales() {
+    const sales = await db.sales.toArray();
+    return sales.sort((a, b) => b.soldAt - a.soldAt);
+  },
+  async saveSale(sale) {
+    await db.sales.put(sale);
+  },
+  async deleteSale(id) {
+    await db.sales.delete(id);
   },
 
   async getOverrides() {
@@ -195,22 +297,22 @@ export const localRepository: Repository = {
   },
 
   async exportAll(): Promise<BackupPayload> {
-    const [games, settings, prices, items, overrides, photos] = await Promise.all([
+    const [games, settings, items, overrides, photos] = await Promise.all([
       db.games.toArray(),
       this.getSettings(),
-      db.prices.toArray(),
       db.items.toArray(),
       db.overrides.toArray(),
       db.photos.toArray(),
     ]);
+    const sales = await db.sales.toArray();
     return {
       app: 'twomoons-market',
       version: 1,
       exportedAt: new Date().toISOString(),
       games,
       settings,
-      prices,
       items,
+      sales,
       overrides,
       photos,
     };
@@ -218,36 +320,48 @@ export const localRepository: Repository = {
 
   async importAll(payload, mode) {
     if (payload.app !== 'twomoons-market') throw new Error('Datei stammt nicht aus TwoMoons Market.');
-    await db.transaction('rw', [db.games, db.prices, db.items, db.overrides, db.photos, db.settings], async () => {
+    await db.transaction('rw', [db.games, db.items, db.sales, db.overrides, db.photos, db.settings], async () => {
       if (mode === 'replace') {
         await Promise.all([
           db.games.clear(),
-          db.prices.clear(),
           db.items.clear(),
+          db.sales.clear(),
           db.overrides.clear(),
           db.photos.clear(),
         ]);
       }
       if (payload.games?.length) await db.games.bulkPut(payload.games);
-      if (payload.prices?.length) await db.prices.bulkPut(payload.prices);
       if (payload.items?.length) await db.items.bulkPut(payload.items);
+      if (payload.sales?.length) await db.sales.bulkPut(payload.sales);
       if (payload.overrides?.length) await db.overrides.bulkPut(payload.overrides);
       if (payload.photos?.length) await db.photos.bulkPut(payload.photos);
       if (payload.settings) await db.settings.put({ ...payload.settings, id: 'settings' });
     });
+
+    // Preise liegen in Blöcken und laufen deshalb über den regulären Schreibweg
+    if (payload.prices?.length) {
+      if (mode === 'replace') await this.clearPriceEntries();
+      await this.upsertPriceEntries(payload.prices);
+    }
   },
 
   async resetAll() {
-    await db.transaction('rw', [db.games, db.prices, db.items, db.overrides, db.photos, db.settings], async () => {
-      await Promise.all([
-        db.games.clear(),
-        db.prices.clear(),
-        db.items.clear(),
-        db.overrides.clear(),
-        db.photos.clear(),
-        db.settings.clear(),
-      ]);
-    });
+    await db.transaction(
+      'rw',
+      [db.games, db.priceBuckets, db.priceMeta, db.items, db.sales, db.overrides, db.photos, db.settings],
+      async () => {
+        await Promise.all([
+          db.games.clear(),
+          db.priceBuckets.clear(),
+          db.priceMeta.clear(),
+          db.items.clear(),
+          db.sales.clear(),
+          db.overrides.clear(),
+          db.photos.clear(),
+          db.settings.clear(),
+        ]);
+      },
+    );
     await ensureSeed();
   },
 };

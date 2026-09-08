@@ -827,3 +827,153 @@ tbody tr:hover {
   gap: 11px;
   margin-bottom: 4px;
 }
+
+/* ---------- Preisfreigabe ---------- */
+
+.approval {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  cursor: pointer;
+  color: var(--text);
+  font-size: inherit;
+}
+.approval:hover .approval__card {
+  color: var(--text);
+}
+.approval__price {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  align-items: baseline;
+  gap: 6px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.approval__price strong {
+  font-size: 16px;
+}
+.approval__arrow {
+  color: var(--text-dim);
+}
+@media (max-width: 560px) {
+  .approval {
+    grid-template-columns: auto 1fr;
+    row-gap: 8px;
+  }
+  .approval__price {
+    grid-column: 2;
+    justify-content: end;
+  }
+}
+
+/* ---------- Umsatzdiagramm ---------- */
+
+.chart {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.chart__plot {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: 190px auto;
+  column-gap: 10px;
+  row-gap: 6px;
+}
+.chart__axis {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  padding-bottom: 1px;
+}
+.chart__bars {
+  grid-column: 2;
+  grid-row: 1;
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 6px;
+  align-items: end;
+  border-bottom: 1px solid var(--border);
+}
+.chart__labels {
+  grid-column: 2;
+  grid-row: 2;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.chart__grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border);
+  opacity: 0.7;
+}
+.chart__col {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 100%;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: default;
+}
+.chart__col:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.chart__bar {
+  width: 100%;
+  min-height: 3px;
+  background: var(--accent);
+  border-radius: 4px 4px 0 0;
+  transition: filter 0.12s;
+}
+.chart__col.is-hover .chart__bar {
+  filter: brightness(1.25);
+}
+.chart__tip {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  background: var(--bg-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 7px 9px;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: nowrap;
+  color: var(--text);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+.chart__tip--start {
+  left: 0;
+  transform: none;
+}
+.chart__tip--end {
+  left: auto;
+  right: 0;
+  transform: none;
+}

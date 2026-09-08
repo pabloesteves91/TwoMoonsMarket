@@ -3,7 +3,16 @@ import { useStore } from '../store';
 import { formatDate, formatMoney, formatNumber, formatPercent } from '../lib/format';
 
 export default function Dashboard() {
-  const { pricedItems, settings, games, priceStats, items } = useStore();
+  const { pricedItems, settings, games, priceStats, items, sales } = useStore();
+
+  // Verkäufe der letzten 30 Tage
+  const since = Date.now() - 30 * 24 * 3600 * 1000;
+  const recent = sales.filter((sale) => sale.soldAt >= since);
+  const revenue30 = recent.reduce((sum, sale) => sum + sale.unitPrice * sale.quantity, 0);
+  const cards30 = recent.reduce((sum, sale) => sum + sale.quantity, 0);
+  const profit30 = recent
+    .filter((sale) => sale.purchasePrice !== undefined)
+    .reduce((sum, sale) => sum + (sale.unitPrice - (sale.purchasePrice ?? 0)) * sale.quantity, 0);
 
   const totalUnits = items.reduce((sum, item) => sum + item.quantity, 0);
   const sellValue = pricedItems.reduce((sum, row) => sum + (row.totalSell ?? 0), 0);
@@ -13,6 +22,7 @@ export default function Dashboard() {
   const sellOfPriced = withCost.reduce((sum, row) => sum + (row.totalSell ?? 0), 0);
   const marginPercent = costOfPriced > 0 ? ((sellOfPriced - costOfPriced) / costOfPriced) * 100 : null;
   const unpriced = pricedItems.filter((row) => row.calc.sellPrice === null);
+  const pending = pricedItems.filter((row) => row.needsApproval);
   const lastImport = priceStats.reduce<number | null>(
     (latest, stat) => (stat.updatedAt && (!latest || stat.updatedAt > latest) ? stat.updatedAt : latest),
     null,
@@ -47,6 +57,9 @@ export default function Dashboard() {
           <Link className="btn" to="/preise">
             Preise importieren
           </Link>
+          <Link className="btn" to="/verkaeufe">
+            Verkäufe
+          </Link>
           <Link className="btn btn--primary" to="/bestand">
             Bestand öffnen
           </Link>
@@ -74,11 +87,34 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="stat">
+          <div className="stat__label">Umsatz 30 Tage</div>
+          <div className="stat__value">{formatMoney(revenue30, settings)}</div>
+          <div className="stat__hint">
+            {formatNumber(cards30)} Karten
+            {profit30 !== 0 ? ` · Gewinn ${formatMoney(profit30, settings)}` : ''}
+          </div>
+        </div>
+        <div className="stat">
           <div className="stat__label">Preisliste</div>
           <div className="stat__value">{formatNumber(priceStats.reduce((s, p) => s + p.count, 0))}</div>
           <div className="stat__hint">Stand: {formatDate(lastImport)}</div>
         </div>
       </div>
+
+      {priceStats.every((stat) => stat.count === 0) ? (
+        <p className="notice notice--warn" style={{ marginTop: 16 }}>
+          Auf diesem Gerät ist noch keine Preisliste geladen. Ohne sie schlägt die App beim Erfassen keine
+          Karten vor und rechnet keine Verkaufspreise. <Link to="/preise">Jetzt laden</Link> – das dauert etwa
+          eine Viertelminute und muss pro Gerät einmal gemacht werden.
+        </p>
+      ) : null}
+
+      {pending.length > 0 ? (
+        <p className="notice notice--ok" style={{ marginTop: 16 }}>
+          Bei {formatNumber(pending.length)} Karten weicht der berechnete Preis vom Preis am Kärtchen ab.{' '}
+          <Link to="/freigabe">Zur Preisfreigabe</Link>
+        </p>
+      ) : null}
 
       {unpriced.length > 0 ? (
         <p className="notice notice--warn" style={{ marginTop: 16 }}>

@@ -11,10 +11,10 @@ import {
 } from 'firebase/firestore';
 import { getDb } from './config';
 import { WORKSPACE_ID } from './env';
-import { DEFAULT_GAMES, getPriceSample, localRepository } from '../db/localRepository';
+import { DEFAULT_GAMES, getPriceMetaMap, localRepository } from '../db/localRepository';
 import { DEFAULT_SETTINGS } from '../lib/pricing';
 import type { BackupPayload, PriceStats, Repository } from '../db/repository';
-import type { Game, InventoryItem, Photo, RuleOverride, Settings } from '../types';
+import type { Game, InventoryItem, Photo, RuleOverride, Sale, Settings } from '../types';
 
 /**
  * Firestore-Backend.
@@ -116,22 +116,20 @@ export const firebaseRepository: Repository = {
   // --- Preislisten bleiben lokal ---
   getPriceEntries: (gameId) => localRepository.getPriceEntries(gameId),
   countPriceEntries: (gameId) => localRepository.countPriceEntries(gameId),
-  upsertPriceEntries: (entries) => localRepository.upsertPriceEntries(entries),
+  upsertPriceEntries: (entries, options) => localRepository.upsertPriceEntries(entries, options),
   clearPriceEntries: (gameId) => localRepository.clearPriceEntries(gameId),
   searchPriceEntries: (query, gameId, limit) => localRepository.searchPriceEntries(query, gameId, limit),
   resolveEntriesForItems: (items) => localRepository.resolveEntriesForItems(items),
 
   async getPriceStats(): Promise<PriceStats[]> {
-    // Spiele kommen aus Firestore, die Zählung aus der lokalen Preisliste
+    // Spiele kommen aus Firestore, Anzahl und Stand aus der lokalen Preisliste
     const games = await this.getGames();
-    const stats: PriceStats[] = [];
-    for (const game of games) {
-      const count = await localRepository.countPriceEntries(game.id);
-      let updatedAt: number | null = null;
-      if (count > 0) updatedAt = (await getPriceSample(game.id))?.updatedAt ?? null;
-      stats.push({ gameId: game.id, count, updatedAt });
-    }
-    return stats;
+    const meta = await getPriceMetaMap();
+    return games.map((game) => ({
+      gameId: game.id,
+      count: meta.get(game.id)?.count ?? 0,
+      updatedAt: meta.get(game.id)?.updatedAt ?? null,
+    }));
   },
 
   async getItems() {
@@ -145,6 +143,17 @@ export const firebaseRepository: Repository = {
     const photoId = (snapshot.data() as InventoryItem | undefined)?.photoId;
     await deleteDoc(doc(col('items'), id));
     if (photoId) await deleteDoc(doc(col('photos'), photoId));
+  },
+
+  async getSales() {
+    const sales = await readAll<Sale>('sales');
+    return sales.sort((a, b) => b.soldAt - a.soldAt);
+  },
+  async saveSale(sale) {
+    await setDoc(doc(col('sales'), sale.id), clean(sale as unknown as Record<string, unknown>));
+  },
+  async deleteSale(id) {
+    await deleteDoc(doc(col('sales'), id));
   },
 
   async getOverrides() {
@@ -173,13 +182,13 @@ export const firebaseRepository: Repository = {
   },
 
   async exportAll(): Promise<BackupPayload> {
-    const [games, settings, items, overrides, photos, prices] = await Promise.all([
+    const [games, settings, items, sales, overrides, photos] = await Promise.all([
       readAll<Game>('games'),
       this.getSettings(),
       readAll<InventoryItem>('items'),
+      readAll<Sale>('sales'),
       readAll<RuleOverride>('overrides'),
       readAll<Photo>('photos'),
-      localRepository.getPriceEntries(),
     ]);
     return {
       app: 'twomoons-market',
@@ -187,8 +196,8 @@ export const firebaseRepository: Repository = {
       exportedAt: new Date().toISOString(),
       games,
       settings,
-      prices,
       items,
+      sales,
       overrides,
       photos,
     };
@@ -200,12 +209,14 @@ export const firebaseRepository: Repository = {
       await Promise.all([
         clearCollection('games'),
         clearCollection('items'),
+        clearCollection('sales'),
         clearCollection('overrides'),
         clearCollection('photos'),
       ]);
     }
     if (payload.games?.length) await writeMany('games', payload.games);
     if (payload.items?.length) await writeMany('items', payload.items);
+    if (payload.sales?.length) await writeMany('sales', payload.sales);
     if (payload.overrides?.length) await writeMany('overrides', payload.overrides);
     if (payload.photos?.length) await writeMany('photos', payload.photos);
     if (payload.settings) await this.saveSettings({ ...payload.settings, id: 'settings' });
@@ -220,6 +231,7 @@ export const firebaseRepository: Repository = {
     await Promise.all([
       clearCollection('games'),
       clearCollection('items'),
+      clearCollection('sales'),
       clearCollection('overrides'),
       clearCollection('photos'),
       clearCollection('settings'),
