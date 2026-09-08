@@ -37,6 +37,16 @@ const CATALOG_URLS = (gameId) => [
   `https://downloads.s3.cardmarket.com/productCatalog/productList/products_singles_${gameId}.csv`,
 ];
 
+// Der Produktkatalog führt die Edition möglicherweise nur als Nummer. Die
+// Zuordnung Nummer -> Name steht in einer eigenen Datei; welcher Pfad stimmt,
+// ist nicht dokumentiert, deshalb der Reihe nach.
+const EXPANSION_URLS = (gameId) => [
+  `https://downloads.s3.cardmarket.com/productCatalog/expansion/expansions_${gameId}.json`,
+  `https://downloads.s3.cardmarket.com/productCatalog/expansions/expansions_${gameId}.json`,
+  `https://downloads.s3.cardmarket.com/productCatalog/expansion/expansion_${gameId}.json`,
+  `https://downloads.s3.cardmarket.com/productCatalog/expansionList/expansions_${gameId}.json`,
+];
+
 function parseArgs() {
   const args = { games: [1, 6], out: './data', catalog: false, index: false };
   for (let i = 2; i < argv.length; i++) {
@@ -118,6 +128,18 @@ async function main() {
     } catch (err) {
       failures++;
       console.error(`✗ Produktkatalog ${label} fehlgeschlagen.\n${err.message}`);
+    }
+
+    // Editionsnamen sind optional – fehlen sie, bleibt das Set leer, alles
+    // andere funktioniert weiter.
+    try {
+      const { url, body } = await tryDownload(EXPANSION_URLS(gameId));
+      const file = name('expansions', label, 'json');
+      await writeFile(`${out}/${file}`, body, 'utf8');
+      manifest.files.push({ kind: 'expansions', game: label, cardmarketGameId: gameId, file, bytes: body.length });
+      console.log(`✓ Editionen ${label}: ${out}/${file} (Quelle ${url})`);
+    } catch (err) {
+      console.warn(`· Editionsliste ${label} nicht gefunden – Sets bleiben leer.\n${err.message}`);
     }
   }
 
