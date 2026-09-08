@@ -98,6 +98,15 @@ async function main() {
     const catalogFile = group.files.find((f) => f.kind === 'catalog' && f.file.endsWith('.json'));
     const priceFile = group.files.find((f) => f.kind === 'priceGuide' && f.file.endsWith('.json'));
     const expansionFile = group.files.find((f) => f.kind === 'expansions' && f.file.endsWith('.json'));
+    // Zusatzangaben je Produktnummer aus einer offenen Quelle (Scryfall für Magic):
+    // Set-Kürzel, Sammlernummer und Seltenheit. Hat Vorrang, weil dort die
+    // Sammlernummer steht, die der Cardmarket-Katalog gar nicht führt.
+    const metaFile = group.files.find((f) => f.kind === 'productMeta' && f.file.endsWith('.json'));
+    let productMeta = null;
+    if (metaFile) {
+      productMeta = await readJson(metaFile.file);
+      console.log(`· ${game}: ${Object.keys(productMeta).length.toLocaleString('de-CH')} Zusatzangaben je Karte`);
+    }
     if (!priceFile) continue;
 
     // Editionsnummer -> Abkürzung und Name. Im Laden zählt die Abkürzung
@@ -151,11 +160,17 @@ async function main() {
 
       const out = { idProduct: id };
       const meta = names.get(id);
+      const extra = productMeta?.[id];
       if (meta?.name) out.name = meta.name;
-      if (meta?.set) out.expansion = meta.set;
-      if (meta?.setName) out.setName = meta.setName;
-      if (meta?.number) out.number = meta.number;
-      if (meta?.rarity) out.rarity = meta.rarity;
+
+      const set = extra?.set ?? meta?.set;
+      const setName = extra?.setName ?? meta?.setName;
+      if (set) out.expansion = set;
+      if (setName && setName !== set) out.setName = setName;
+      const number = extra?.number ?? meta?.number;
+      if (number) out.number = number;
+      const rarity = extra?.rarity ?? meta?.rarity;
+      if (rarity) out.rarity = rarity;
 
       let hasPrice = false;
       for (const [target, keys] of PRICE_FIELDS) {

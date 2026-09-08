@@ -51,28 +51,43 @@ function candidates(gameId) {
   ];
 }
 
-async function scanPage(slug) {
-  const url = `https://www.cardmarket.com/en/${slug}/Data/Price-Guide`;
+async function scanPage(url) {
   try {
     const response = await fetch(url, { headers: { 'User-Agent': UA }, redirect: 'follow' });
     if (!response.ok) {
-      console.log(`  Seite ${url} → HTTP ${response.status}`);
+      console.log(`  ${url} → HTTP ${response.status}`);
       return;
     }
     const html = await response.text();
-    // Alles einsammeln, was nach einer Datei oder einem Download aussieht
+    console.log(`  ${url} → ${(html.length / 1000).toFixed(0)} kB`);
+
+    // 1. Dateien, die zum Herunterladen angeboten werden
     const links = new Set();
     for (const match of html.matchAll(/(https?:\/\/[^"'\s<>]+\.(?:json|csv|zip|gz))/gi)) links.add(match[1]);
     for (const match of html.matchAll(/href="([^"]*(?:download|Download|export|Export)[^"]*)"/g)) links.add(match[1]);
-    if (links.size === 0) {
-      console.log(`  Seite ${url} gelesen (${(html.length / 1000).toFixed(0)} kB), keine Download-Links im HTML.`);
-      console.log('  (Die Seite lädt ihre Links vermutlich per JavaScript nach.)');
-    } else {
-      console.log(`  Links auf ${url}:`);
-      for (const link of links) console.log(`    ${link}`);
+    for (const link of [...links].slice(0, 20)) console.log(`    Datei: ${link}`);
+
+    // 2. Auswahlfelder: dort steht die Editionsnummer oft direkt neben dem Namen
+    const options = [...html.matchAll(/<option[^>]*value="(\d{2,7})"[^>]*>([^<]{2,80})<\/option>/g)];
+    if (options.length > 0) {
+      console.log(`    ${options.length} Auswahleinträge gefunden, die ersten fünf:`);
+      for (const [, value, label] of options.slice(0, 5)) {
+        console.log(`      ${value} = ${label.trim().replace(/&amp;/g, '&')}`);
+      }
+    }
+
+    // 3. Editionsnummern in eingebettetem JavaScript
+    const embedded = [...html.matchAll(/"idExpansion"\s*:\s*(\d+)[^}]{0,120}?"(?:enName|name|expansionName)"\s*:\s*"([^"]{2,80})"/g)];
+    if (embedded.length > 0) {
+      console.log(`    ${embedded.length} Editionen in eingebettetem JavaScript, die ersten drei:`);
+      for (const [, id, label] of embedded.slice(0, 3)) console.log(`      ${id} = ${label}`);
+    }
+
+    if (links.size === 0 && options.length === 0 && embedded.length === 0) {
+      console.log('    Nichts Verwertbares im HTML (Inhalt wird vermutlich per JavaScript nachgeladen).');
     }
   } catch (err) {
-    console.log(`  Seite ${url} → Fehler: ${err.message}`);
+    console.log(`  ${url} → Fehler: ${err.message}`);
   }
 }
 
@@ -80,7 +95,11 @@ async function main() {
   const onlyCandidates = argv.includes('--candidates');
   for (const game of GAMES) {
     console.log(`\n=== ${game.name} (idGame ${game.id}) ===`);
-    if (!onlyCandidates) await scanPage(game.slug);
+    if (!onlyCandidates) {
+      // Die Preisübersicht und die Produktsuche führen beide eine Editionsauswahl
+      await scanPage(`https://www.cardmarket.com/en/${game.slug}/Data/Price-Guide`);
+      await scanPage(`https://www.cardmarket.com/en/${game.slug}/Products/Singles`);
+    }
     console.log('  Mögliche Pfade für die Editionsliste:');
     for (const url of candidates(game.id)) {
       console.log(`    ${await head(url)}  ${url}`);

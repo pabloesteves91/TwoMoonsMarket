@@ -173,7 +173,24 @@ Das Skript legt die Dateien in `data/` ab. Diese anschliessend in der App unter
 `index.json`, wie es der automatische Abruf verwendet. Bitte vorab die
 Nutzungsbedingungen von Cardmarket für automatisierte Abrufe prüfen.
 
-### Editionsnamen über die Cardmarket-API
+### Set-Kürzel und Sammlernummer für Magic (Scryfall)
+
+Der Cardmarket-Katalog führt die Edition nur als Nummer und kennt keine
+Sammlernummer. [Scryfall](https://scryfall.com) ist frei zugänglich, braucht
+keine Anmeldung und führt zu jeder Ausgabe die Cardmarket-Produktnummer mit –
+darüber verbindet `scripts/enrich-scryfall.mjs` beides und ergänzt Set-Kürzel
+(„TLA"), Sammlernummer und Seltenheit.
+
+Die Sammeldatei ist mehrere hundert Megabyte gross und wird deshalb zeilenweise
+verarbeitet. Schlägt der Schritt fehl, fehlen nur diese Angaben; alles andere
+läuft weiter. Datenquelle: Scryfall, frei nutzbar mit Namensnennung.
+
+**Für Pokémon gibt es keine vergleichbare Quelle**, die Cardmarket-Produktnummern
+mitführt – dort bleibt das Set vorerst leer und die App zeigt die
+Produktnummer. `scripts/probe-cardmarket.mjs` sucht bei jedem Lauf weiter nach
+einer öffentlichen Editionsliste.
+
+### Editionsnamen über die Cardmarket-API (nur mit Verkäufer-Konto)
 
 Der Produktkatalog führt die Edition nur als Nummer (`idExpansion`). Die Zuordnung
 zu Abkürzung („TLA") und Namen liefert die
@@ -181,6 +198,9 @@ zu Abkürzung („TLA") und Namen liefert die
 Abfrage je Spiel** – für Magic und Pokémon gleichermassen.
 
 Einrichtung:
+
+Der App-Zugang ist an den Verkäufer-Status gekoppelt; ohne ihn greift der
+Scryfall-Weg oben. Falls der Zugang später besteht:
 
 1. Im Cardmarket-Konto unter *Account → Einstellungen → App-Zugang* eine App
    anlegen. Cardmarket zeigt danach vier Werte an: App-Token, App-Secret,

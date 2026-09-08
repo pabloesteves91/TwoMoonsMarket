@@ -60,6 +60,9 @@ jobs:
           CM_ACCESS_SECRET: ${{ secrets.CM_ACCESS_SECRET }}
         run: |
           node scripts/import-prices.mjs --out dist/prices --index --catalog
+          # Ergänzt Magic um Set-Kürzel, Sammlernummer und Seltenheit; schlägt
+          # der Schritt fehl, fehlen nur diese Angaben.
+          node scripts/enrich-scryfall.mjs dist/prices
           node scripts/build-price-bundle.mjs dist/prices
 
       # Schlägt der Abruf fehl (Cardmarket nicht erreichbar oder Format geändert),
