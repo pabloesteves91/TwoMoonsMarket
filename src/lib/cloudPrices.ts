@@ -26,6 +26,31 @@ export interface PriceManifest {
 
 const MANIFEST_URL = 'prices/index.json';
 
+/**
+ * Stand der zuletzt übernommenen Preisliste, je Gerät.
+ *
+ * Die Preise liegen im Web; jedes Gerät hält nur eine Kopie zum schnellen
+ * Nachschlagen. Dieser Merker sagt, welcher Stand das ist – stimmt er nicht mehr
+ * mit dem veröffentlichten überein, holt die App die neue Fassung von selbst.
+ */
+const VERSION_KEY = 'twomoons.prices.version';
+
+export function storedPriceVersion(): string | null {
+  try {
+    return localStorage.getItem(VERSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function rememberPriceVersion(createdAt: string): void {
+  try {
+    localStorage.setItem(VERSION_KEY, createdAt);
+  } catch {
+    // Privater Modus o.ä. – dann wird beim nächsten Start erneut geladen
+  }
+}
+
 /** Liest das Manifest. `null` = auf diesem Host liegen keine Preisdateien. */
 export async function fetchPriceManifest(): Promise<PriceManifest | null> {
   try {
@@ -116,5 +141,16 @@ export async function importPricesFromCloud(
     }
   }
 
+  if (skippedFiles.length === 0) rememberPriceVersion(manifest.createdAt);
   return { imported, files: relevant.length - skippedFiles.length, skippedFiles, createdAt: manifest.createdAt };
+}
+
+/**
+ * Prüft, ob eine neuere Preisliste veröffentlicht wurde.
+ * Rückgabe `null`, wenn nichts zu tun ist.
+ */
+export async function findNewerPrices(): Promise<PriceManifest | null> {
+  const manifest = await fetchPriceManifest();
+  if (!manifest) return null;
+  return manifest.createdAt === storedPriceVersion() ? null : manifest;
 }

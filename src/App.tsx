@@ -26,7 +26,7 @@ const CONFIG_NAV = [
 ];
 
 export default function App() {
-  const { items, priceStats, settings, pricedItems } = useStore();
+  const { items, priceStats, settings, pricedItems, priceSync } = useStore();
   const { user, signOut } = useAuth();
   const priceCount = priceStats.reduce((sum, s) => sum + s.count, 0);
   const pending = pricedItems.filter((row) => row.needsApproval).length;
@@ -105,6 +105,19 @@ export default function App() {
       </header>
 
       <main className="main">
+        {priceSync ? (
+          <p className="sync" role="status">
+            <span className="sync__dot" aria-hidden />
+            Preise werden aktualisiert –{' '}
+            {priceSync.phase === 'download'
+              ? 'wird geladen'
+              : priceSync.phase === 'parse'
+                ? 'wird gelesen'
+                : 'wird gespeichert'}{' '}
+            ({Math.min(priceSync.index + 1, priceSync.total)}/{priceSync.total}). Die App ist währenddessen benutzbar.
+          </p>
+        ) : null}
+
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/bestand" element={<Inventory />} />

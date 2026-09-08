@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { repo } from './db';
 import { uid } from './lib/format';
+import { findNewerPrices, importPricesFromCloud, type CloudImportProgress } from './lib/cloudPrices';
 import type { PriceStats } from './db/repository';
 import { buildPriceContext, calculatePrice, findPriceEntry } from './lib/pricing';
 import type {
@@ -52,6 +53,8 @@ interface StoreValue {
   sales: Sale[];
   overrides: RuleOverride[];
   priceStats: PriceStats[];
+  /** Läuft gerade ein automatischer Preisabgleich? */
+  priceSync: CloudImportProgress | null;
   pricedItems: PricedItem[];
   gameById: Map<string, Game>;
   refresh: () => Promise<void>;
@@ -81,6 +84,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [overrides, setOverrides] = useState<RuleOverride[]>([]);
   const [entries, setEntries] = useState<PriceEntry[]>([]);
   const [priceStats, setPriceStats] = useState<PriceStats[]>([]);
+  const [priceSync, setPriceSync] = useState<CloudImportProgress | null>(null);
 
   const refresh = useCallback(async () => {
     const [nextGames, nextSettings, nextItems, nextSales, nextOverrides, stats] = await Promise.all([
@@ -105,6 +109,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  /**
+   * Preise selbstständig abholen.
+   *
+   * Die Liste liegt im Web und wird wöchentlich neu veröffentlicht; jedes Gerät
+   * hält nur eine Kopie zum schnellen Nachschlagen. Ist die Kopie veraltet oder
+   * gar nicht vorhanden, holt die App die neue Fassung ohne Zutun – bisher
+   * musste das auf jedem Gerät von Hand angestossen werden.
+   */
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const manifest = await findNewerPrices();
+        if (!manifest || cancelled) return;
+        await importPricesFromCloud(manifest, await repo.getGames(), (progress) => {
+          if (!cancelled) setPriceSync(progress);
+        });
+        if (!cancelled) await refresh();
+      } catch {
+        // Kein Netz oder keine veröffentlichte Liste – der Knopf unter "Preise"
+        // bleibt als Weg von Hand
+      } finally {
+        if (!cancelled) setPriceSync(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, refresh]);
 
   const pricedItems = useMemo<PricedItem[]>(() => {
     if (!settings) return [];
@@ -163,6 +200,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       sales,
       overrides,
       priceStats,
+      priceSync,
       pricedItems,
       gameById: new Map(games.map((g) => [g.id, g])),
       refresh,
@@ -251,7 +289,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await refresh();
       },
     };
-  }, [ready, games, settings, items, sales, overrides, priceStats, pricedItems, refresh]);
+  }, [ready, games, settings, items, sales, overrides, priceStats, priceSync, pricedItems, refresh]);
 
   if (!value) {
     return (
