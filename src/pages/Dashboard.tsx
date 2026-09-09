@@ -21,7 +21,7 @@ export default function Dashboard() {
   const costOfPriced = withCost.reduce((sum, row) => sum + (row.totalCost ?? 0), 0);
   const sellOfPriced = withCost.reduce((sum, row) => sum + (row.totalSell ?? 0), 0);
   const marginPercent = costOfPriced > 0 ? ((sellOfPriced - costOfPriced) / costOfPriced) * 100 : null;
-  const unpriced = pricedItems.filter((row) => row.calc.sellPrice === null);
+  const unpriced = pricedItems.filter((row) => row.sellPrice === null);
   const pending = pricedItems.filter((row) => row.needsApproval);
   const lastImport = priceStats.reduce<number | null>(
     (latest, stat) => (stat.updatedAt && (!latest || stat.updatedAt > latest) ? stat.updatedAt : latest),

@@ -10,7 +10,10 @@ export default function SellForm({ row, onClose }: { row: PricedItem; onClose: (
   const { settings, recordSale } = useStore();
   // Wer gebucht hat, entscheidet später, wer stornieren darf
   const { user } = useAuth();
-  const suggested = row.approvedPrice ?? row.calc.sellPrice ?? 0;
+  // Derselbe Wert, den die Bestandsliste nennt – der Preis auf dem Kärtchen.
+  // Nicht neu zusammensetzen: genau diese doppelte Rechnung war der Grund,
+  // weshalb Liste und Dialog einmal auseinanderliefen.
+  const suggested = row.sellPrice ?? 0;
 
   const [quantity, setQuantity] = useState(1);
   // Eingabe in der Anzeigewährung, gespeichert wird in EUR

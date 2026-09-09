@@ -34,6 +34,14 @@ export interface PricedItem {
   item: InventoryItem;
   entry?: PriceEntry;
   calc: PriceCalculation;
+  /**
+   * Preis, zu dem diese Karte tatsächlich über den Tresen geht, pro Stück in EUR:
+   * der Preis auf dem Kärtchen, solange er nicht neu freigegeben wurde. Genau
+   * diesen Wert schlägt auch der Verkaufsdialog vor – Liste, Auswertung und
+   * Verkauf sollen dieselbe Zahl nennen. `calc.sellPrice` ist demgegenüber der
+   * frisch berechnete Vorschlag und gehört auf die Freigabe-Seite.
+   */
+  sellPrice: number | null;
   /** Verkaufswert der gesamten Menge in EUR */
   totalSell: number | null;
   /** Einkaufswert der gesamten Menge in EUR */
@@ -237,16 +245,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return items.map((item) => {
       const entry = findPriceEntry(item, ctx);
       const calc = calculatePrice(item, entry, ctx);
-      const totalSell = calc.sellPrice === null ? null : calc.sellPrice * item.quantity;
+      const approvedPrice = item.approvedPrice ?? null;
+      // Verkauft wird zum Kärtchenpreis. Also rechnen Bestandswert und Marge
+      // auch damit – sonst weist die Auswertung Geld aus, das an der Kasse
+      // nie eingenommen wird.
+      const sellPrice = approvedPrice ?? calc.sellPrice;
+      const totalSell = sellPrice === null ? null : sellPrice * item.quantity;
       const totalCost = item.purchasePrice === undefined ? null : item.purchasePrice * item.quantity;
       const margin =
-        calc.sellPrice === null || item.purchasePrice === undefined
-          ? null
-          : calc.sellPrice - item.purchasePrice;
+        sellPrice === null || item.purchasePrice === undefined ? null : sellPrice - item.purchasePrice;
       const marginPercent =
         margin === null || !item.purchasePrice ? null : (margin / item.purchasePrice) * 100;
 
-      const approvedPrice = item.approvedPrice ?? null;
       const neverApproved = approvedPrice === null && calc.sellPrice !== null;
       const priceDelta =
         calc.sellPrice === null || approvedPrice === null ? null : calc.sellPrice - approvedPrice;
@@ -265,6 +275,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         item,
         entry,
         calc,
+        sellPrice,
         totalSell,
         totalCost,
         margin,

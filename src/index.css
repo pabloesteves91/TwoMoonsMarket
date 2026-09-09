@@ -209,6 +209,13 @@ a {
 @media (max-width: 860px) {
   .shell {
     grid-template-columns: 1fr;
+    /*
+     * Kopfzeile so hoch wie ihr Inhalt, der Rest gehört dem Seiteninhalt.
+     * Ohne diese Angabe verteilt das Raster den freien Platz auf beide Zeilen –
+     * bei kurzen Seiten wuchs die Kopfzeile dadurch auf das Dreifache, mit einem
+     * breiten weissen Band über und unter dem Logo.
+     */
+    grid-template-rows: auto 1fr;
   }
   .mobile-bar .brand__logo {
     height: 34px;
