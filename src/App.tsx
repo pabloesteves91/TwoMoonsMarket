@@ -98,6 +98,19 @@ export default function App() {
           <span className="brand__name">TwoMoons Market</span>
         </NavLink>
         <span className="row" style={{ gap: 2, flexWrap: 'nowrap' }}>
+          {/* Das Abmelden steht sonst in den Einstellungen – die sind für das
+              Verkaufskonto gesperrt. Ohne diesen Knopf käme es nicht mehr
+              heraus, etwa beim Schichtwechsel am Tresen. */}
+          {storeOnly ? (
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={() => void signOut()}
+              title={user?.email ? `Angemeldet als ${user.email} – abmelden` : 'Abmelden'}
+            >
+              Abmelden
+            </button>
+          ) : null}
           {configNav.map((entry) => (
             <NavLink
               key={entry.to}
