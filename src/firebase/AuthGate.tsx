@@ -63,7 +63,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   if (state.status === 'loading') {
     return (
       <div className="boot">
-        <div className="boot__logo">◑◐</div>
+        <img className="boot__logo" src="logo.png" alt="TwoMoons" />
         <p>Anmeldung wird geprüft …</p>
       </div>
     );
@@ -114,11 +114,8 @@ function LoginScreen() {
     <div className="auth">
       <form className="auth__card" onSubmit={submit}>
         <div className="auth__brand">
-          <span className="brand__mark">◑◐</span>
-          <div>
-            <div className="brand__name">TwoMoons Market</div>
-            <div className="brand__sub">TCG Collector</div>
-          </div>
+          <img className="brand__logo" src="logo.png" alt="TwoMoons" />
+          <div className="brand__sub">Market · TCG Collector</div>
         </div>
 
         <h1 style={{ fontSize: 19 }}>Anmelden</h1>
@@ -178,11 +175,8 @@ function NoAccessScreen({
     <div className="auth">
       <div className="auth__card">
         <div className="auth__brand">
-          <span className="brand__mark">◑◐</span>
-          <div>
-            <div className="brand__name">TwoMoons Market</div>
-            <div className="brand__sub">TCG Collector</div>
-          </div>
+          <img className="brand__logo" src="logo.png" alt="TwoMoons" />
+          <div className="brand__sub">Market · TCG Collector</div>
         </div>
         <h1 style={{ fontSize: 19 }}>
           {reason === 'rulesDenied' ? 'Zugriff gesperrt' : 'Noch nicht freigeschaltet'}

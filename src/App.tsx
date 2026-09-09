@@ -48,12 +48,8 @@ export default function App() {
     <div className="shell">
       <aside className="sidebar">
         <NavLink to="/" className="brand">
-          <span className="brand__mark">◑◐</span>
-          <span>
-            <span className="brand__name">TwoMoons Market</span>
-            <br />
-            <span className="brand__sub">TCG Collector</span>
-          </span>
+          <img className="brand__logo" src="logo.png" alt="TwoMoons" />
+          <span className="brand__sub">Market</span>
         </NavLink>
 
         <nav className="nav">
@@ -94,8 +90,7 @@ export default function App() {
 
       <header className="mobile-bar">
         <NavLink to="/" className="brand">
-          <span className="brand__mark">◑◐</span>
-          <span className="brand__name">TwoMoons Market</span>
+          <img className="brand__logo" src="logo.png" alt="TwoMoons Market" />
         </NavLink>
         <span className="row" style={{ gap: 2, flexWrap: 'nowrap' }}>
           {/* Das Abmelden steht sonst in den Einstellungen – die sind für das

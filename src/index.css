@@ -1,29 +1,33 @@
 /* TwoMoons Market – Design-Grundlage
-   Dunkles Interface, Akzentfarbe changiert zwischen den beiden "Monden". */
+   Helles Interface in den Farben des Ladens: das Braun der Wortmarke, das
+   Orange des roten und das Gold des gelben Mondes. Alle Werte für Text sind
+   gegen ihren Hintergrund geprüft und liegen über 4.5:1. */
 
 :root {
-  --bg: #0c0d18;
-  --bg-elevated: #14162a;
-  --bg-soft: #1b1e35;
-  --bg-hover: #232743;
-  --border: #2a2f4d;
-  --border-strong: #3a4068;
-  --text: #eef0fb;
-  --text-muted: #9aa0c4;
-  --text-dim: #6f76a0;
-  --accent: #8b7cf6;
-  --accent-soft: rgba(139, 124, 246, 0.16);
-  --moon: #f2c66d;
-  --moon-soft: rgba(242, 198, 109, 0.14);
-  --success: #4ec99a;
-  --success-soft: rgba(78, 201, 154, 0.14);
-  --danger: #f26f7a;
-  --danger-soft: rgba(242, 111, 122, 0.14);
+  --bg: #faf7f2;
+  --bg-elevated: #ffffff;
+  --bg-soft: #f4efe6;
+  --bg-hover: #ece4d7;
+  --border: #e3d9c9;
+  --border-strong: #cdbda6;
+  --text: #3b1a0a;
+  --text-muted: #6b4a34;
+  --text-dim: #8a6b55;
+  /* Für Text und Ränder etwas tiefer als das Logo-Orange, damit weisse
+     Schrift auf dem Knopf lesbar bleibt (5.6:1 statt 4.4:1). */
+  --accent: #b8400f;
+  --accent-soft: rgba(209, 75, 21, 0.12);
+  --moon: #e0a434;
+  --moon-soft: rgba(224, 164, 52, 0.18);
+  --success: #2f7d4f;
+  --success-soft: rgba(47, 125, 79, 0.12);
+  --danger: #b3261e;
+  --danger-soft: rgba(179, 38, 30, 0.1);
   --radius: 14px;
   --radius-sm: 9px;
-  --shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  --shadow: 0 10px 30px rgba(86, 29, 13, 0.1);
   --sidebar-width: 232px;
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 * {
@@ -38,9 +42,10 @@ body,
 
 body {
   margin: 0;
+  /* Ein Hauch der beiden Monde – oben links rot, oben rechts gold */
   background:
-    radial-gradient(1100px 600px at 12% -10%, rgba(139, 124, 246, 0.16), transparent 60%),
-    radial-gradient(900px 520px at 96% 4%, rgba(242, 198, 109, 0.1), transparent 55%),
+    radial-gradient(1100px 600px at 12% -10%, rgba(209, 75, 21, 0.09), transparent 60%),
+    radial-gradient(900px 520px at 96% 4%, rgba(224, 164, 52, 0.14), transparent 55%),
     var(--bg);
   color: var(--text);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -71,8 +76,8 @@ a {
   color: var(--text-muted);
 }
 .boot__logo {
-  font-size: 40px;
-  color: var(--moon);
+  height: 46px;
+  width: auto;
 }
 
 .shell {
@@ -86,7 +91,7 @@ a {
   top: 0;
   height: 100vh;
   border-right: 1px solid var(--border);
-  background: rgba(12, 13, 24, 0.7);
+  background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(12px);
   padding: 22px 16px;
   display: flex;
@@ -101,16 +106,16 @@ a {
   text-decoration: none;
   color: inherit;
 }
-.brand__mark {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(140deg, var(--accent), #4b3fb0);
-  color: var(--moon);
-  font-size: 17px;
-  box-shadow: 0 6px 18px rgba(75, 63, 176, 0.5);
+/* In der Seitenleiste steht das Logo über dem Zusatz, sonst wird es eng */
+.sidebar .brand {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.brand__logo {
+  height: 40px;
+  width: auto;
+  display: block;
 }
 .brand__name {
   font-weight: 680;
@@ -209,14 +214,8 @@ a {
   .shell {
     grid-template-columns: 1fr;
   }
-  .mobile-bar .brand__mark {
-    width: 32px;
-    height: 32px;
-    border-radius: 10px;
-    font-size: 14px;
-  }
-  .mobile-bar .brand__name {
-    font-size: 15px;
+  .mobile-bar .brand__logo {
+    height: 34px;
   }
   .sidebar {
     display: none;
@@ -230,7 +229,7 @@ a {
     top: 0;
     z-index: 30;
     padding: 9px 16px;
-    background: rgba(12, 13, 24, 0.92);
+    background: rgba(250, 247, 242, 0.92);
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border);
   }
@@ -246,7 +245,7 @@ a {
     right: 0;
     bottom: 0;
     z-index: 40;
-    background: rgba(14, 15, 30, 0.96);
+    background: rgba(255, 255, 255, 0.96);
     backdrop-filter: blur(14px);
     border-top: 1px solid var(--border);
     padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
@@ -362,7 +361,7 @@ a {
   cursor: not-allowed;
 }
 .btn--primary {
-  background: linear-gradient(140deg, var(--accent), #6a5adf);
+  background: linear-gradient(140deg, #d14b15, var(--accent));
   border-color: transparent;
   color: #fff;
 }
@@ -379,7 +378,7 @@ a {
   color: var(--text);
 }
 .btn--danger {
-  border-color: rgba(242, 111, 122, 0.4);
+  border-color: rgba(179, 38, 30, 0.35);
   color: var(--danger);
   background: var(--danger-soft);
 }
@@ -453,23 +452,23 @@ textarea {
   white-space: nowrap;
 }
 .badge--foil {
-  background: linear-gradient(110deg, rgba(139, 124, 246, 0.28), rgba(242, 198, 109, 0.28));
+  background: linear-gradient(110deg, rgba(224, 164, 52, 0.35), rgba(244, 205, 97, 0.3));
   border-color: transparent;
   color: var(--text);
 }
 .badge--warn {
   background: var(--danger-soft);
-  border-color: rgba(242, 111, 122, 0.35);
+  border-color: rgba(179, 38, 30, 0.3);
   color: var(--danger);
 }
 .badge--ok {
   background: var(--success-soft);
-  border-color: rgba(78, 201, 154, 0.35);
+  border-color: rgba(47, 125, 79, 0.3);
   color: var(--success);
 }
 .badge--game {
   border-color: transparent;
-  color: #10121f;
+  color: #ffffff;
   font-weight: 600;
 }
 
@@ -598,6 +597,10 @@ tbody tr:hover {
   margin-top: 5px;
 }
 .item-card__price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -611,7 +614,7 @@ tbody tr:hover {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(6, 7, 14, 0.72);
+  background: rgba(59, 26, 10, 0.4);
   backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
@@ -700,19 +703,19 @@ tbody tr:hover {
   color: var(--text-muted);
 }
 .notice--error {
-  border-color: rgba(242, 111, 122, 0.4);
+  border-color: rgba(179, 38, 30, 0.35);
   background: var(--danger-soft);
-  color: #ffc3c8;
+  color: var(--danger);
 }
 .notice--ok {
-  border-color: rgba(78, 201, 154, 0.4);
+  border-color: rgba(47, 125, 79, 0.35);
   background: var(--success-soft);
-  color: #b6f0d8;
+  color: var(--success);
 }
 .notice--warn {
-  border-color: rgba(242, 198, 109, 0.4);
+  border-color: rgba(224, 164, 52, 0.5);
   background: var(--moon-soft);
-  color: #f6dfae;
+  color: #7a5410;
 }
 
 .dropzone {
@@ -835,8 +838,9 @@ tbody tr:hover {
 }
 .auth__brand {
   display: flex;
-  align-items: center;
-  gap: 11px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
   margin-bottom: 4px;
 }
 

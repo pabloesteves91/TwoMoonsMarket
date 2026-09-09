@@ -393,7 +393,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   if (!value) {
     return (
       <div className="boot">
-        <div className="boot__logo">◑◐</div>
+        <img className="boot__logo" src="logo.png" alt="TwoMoons" />
         <p>TwoMoons Market wird geladen …</p>
       </div>
     );
