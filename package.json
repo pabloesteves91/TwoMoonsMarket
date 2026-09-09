@@ -12,7 +12,8 @@
     "import:prices": "node scripts/import-prices.mjs",
     "deploy": "npm run build && npx --yes firebase-tools@latest deploy --only hosting",
     "deploy:rules": "npx --yes firebase-tools@latest deploy --only firestore:rules",
-    "test:rules": "npx --yes firebase-tools@latest emulators:exec --only firestore --project twomoons-rules-test \"node scripts/test-rules.mjs\""
+    "test:rules": "npx --yes firebase-tools@latest emulators:exec --only firestore --project twomoons-rules-test \"node scripts/test-rules.mjs\"",
+    "test:pokemon": "node scripts/test-pokemon.mjs"
   },
   "dependencies": {
     "dexie": "^4.0.11",

@@ -59,6 +59,11 @@ jobs:
       # Die Rolle "store" ist eine Zugriffsbeschränkung. Was die Oberfläche
       # ausblendet, ist Bequemlichkeit – verbindlich sind die Security Rules.
       # Deshalb laufen sie hier gegen den Emulator, bei jedem Lauf.
+      # Der Abgleich der Pokémon-Editionen hing lange daran, dass die
+      # Namensnormalisierung alles ausser a-z verwarf. Dieser Test hält das fest.
+      - name: Pokémon-Zuordnung prüfen
+        run: npm run test:pokemon
+
       - name: Security Rules prüfen
         timeout-minutes: 8
         run: npm run test:rules
@@ -84,6 +89,18 @@ jobs:
           # Ergänzt Magic um Set-Kürzel, Sammlernummer und Seltenheit; schlägt
           # der Schritt fehl, fehlen nur diese Angaben.
           node scripts/enrich-scryfall.mjs dist/prices
+          # Pokémon: TCGdex kennt auch die japanischen Ausgaben und bei vielen
+          # Sets die Cardmarket-Editions-Nummer – damit muss die Zuordnung nicht
+          # über Kartennamen erraten werden. Schlägt der Klon fehl, greift die
+          # bisherige Quelle, es fehlen dann nur die zusätzlichen Sets.
+          # Beides in der Bedingung, damit ein Fehlschlag den Schritt nicht
+          # abbricht: sonst blieben Bündelung und Kurs darunter ungetan.
+          if git clone --depth 1 --quiet https://github.com/tcgdex/cards-database /tmp/tcgdex \
+            && node scripts/tcgdex-pokemon.mjs /tmp/tcgdex /tmp/tcgdex-pokemon.json; then
+            export TCGDEX_FILE=/tmp/tcgdex-pokemon.json
+          else
+            echo "::warning::TCGdex nicht nutzbar – Pokémon-Sets werden wie bisher über Namen zugeordnet."
+          fi
           node scripts/enrich-pokemon.mjs dist/prices
           node scripts/build-price-bundle.mjs dist/prices
           # Kurs Euro → Franken: im Laden wird in Franken ausgepreist, ein von
