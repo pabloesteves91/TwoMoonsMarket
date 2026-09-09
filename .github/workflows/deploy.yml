@@ -72,6 +72,9 @@ jobs:
           node scripts/enrich-scryfall.mjs dist/prices
           node scripts/enrich-pokemon.mjs dist/prices
           node scripts/build-price-bundle.mjs dist/prices
+          # Kurs Euro → Franken: im Laden wird in Franken ausgepreist, ein von
+          # Hand gepflegter Kurs veraltet unbemerkt.
+          node scripts/fetch-rate.mjs dist/prices
 
       # Schlägt der Abruf fehl (Cardmarket nicht erreichbar oder Format geändert),
       # werden die zuletzt veröffentlichten Preisdateien übernommen, damit der

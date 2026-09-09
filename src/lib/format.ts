@@ -1,8 +1,35 @@
 import type { Settings } from '../types';
 
+/**
+ * Kurs von EUR in die Anzeigewährung.
+ *
+ * Ein Kurs von 0 oder ein leeres Feld würde jede Rechnung zerstören – dann
+ * bleibt es bei 1, also beim Euro-Betrag.
+ */
+export function rate(settings: Pick<Settings, 'currency' | 'eurToChf'>): number {
+  return settings.currency === 'CHF' && settings.eurToChf > 0 ? settings.eurToChf : 1;
+}
+
 /** Rechnet einen EUR-Betrag in die Anzeigewährung um. */
 export function convert(amountEur: number, settings: Pick<Settings, 'currency' | 'eurToChf'>): number {
-  return settings.currency === 'CHF' ? amountEur * settings.eurToChf : amountEur;
+  return amountEur * rate(settings);
+}
+
+/** Rechnet einen Betrag aus der Anzeigewährung zurück in EUR (so wird gespeichert). */
+export function toEur(amountDisplay: number, settings: Pick<Settings, 'currency' | 'eurToChf'>): number {
+  return amountDisplay / rate(settings);
+}
+
+/**
+ * Bereitet einen gespeicherten EUR-Betrag für ein Eingabefeld auf.
+ * Leere Felder bleiben leer, damit "kein Wert" nicht als 0.00 erscheint.
+ */
+export function moneyInput(
+  amountEur: number | null | undefined,
+  settings: Pick<Settings, 'currency' | 'eurToChf'>,
+): string {
+  if (amountEur === null || amountEur === undefined || Number.isNaN(amountEur)) return '';
+  return (Math.round(convert(amountEur, settings) * 100) / 100).toString();
 }
 
 export function formatMoney(

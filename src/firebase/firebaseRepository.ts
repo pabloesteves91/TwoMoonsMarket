@@ -12,7 +12,7 @@ import {
 import { getDb } from './config';
 import { WORKSPACE_ID } from './env';
 import { DEFAULT_GAMES, getPriceMetaMap, localRepository } from '../db/localRepository';
-import { DEFAULT_SETTINGS } from '../lib/pricing';
+import { DEFAULT_SETTINGS, withDefaults } from '../lib/pricing';
 import type { BackupPayload, PriceStats, Repository } from '../db/repository';
 import type { Game, InventoryItem, Photo, RuleOverride, Sale, Settings } from '../types';
 
@@ -104,7 +104,10 @@ export const firebaseRepository: Repository = {
       await setDoc(doc(col('settings'), 'settings'), DEFAULT_SETTINGS);
       return { ...DEFAULT_SETTINGS };
     }
-    return { ...DEFAULT_SETTINGS, ...(snapshot.data() as Settings), id: 'settings' };
+    const { settings, migrated } = withDefaults(snapshot.data() as Partial<Settings>);
+    // Die Umstellung einmal festschreiben, sonst käme sie bei jedem Start wieder
+    if (migrated) await setDoc(doc(col('settings'), 'settings'), settings);
+    return settings;
   },
   async saveSettings(settings) {
     await setDoc(

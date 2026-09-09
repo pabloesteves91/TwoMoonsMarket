@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import Modal from './Modal';
 import PhotoInput from './PhotoInput';
 import { repo } from '../db';
-import { formatMoney, formatNumber, uid } from '../lib/format';
+import { formatMoney, formatNumber, moneyInput, toEur, uid } from '../lib/format';
 import {
   PRICE_BASES,
   PRICE_BASIS_LABELS,
@@ -62,6 +62,12 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
   const [savedCount, setSavedCount] = useState(0);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
+  /**
+   * Getippter Text der Geldfelder. Ohne eigenen Zustand würde das Feld beim
+   * Hin- und Herrechnen springen ("12.5" → "12.499999").
+   */
+  const [purchaseInput, setPurchaseInput] = useState(() => moneyInput(item?.purchasePrice, settings));
+  const [fixedInput, setFixedInput] = useState(() => moneyInput(item?.fixedPrice, settings));
   const searchTimer = useRef<number>();
   const nameRef = useRef<HTMLInputElement>(null);
 
@@ -162,6 +168,9 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
       setLastSaved(name);
       setError(null);
       setDraft({ ...emptyItem(draft.gameId), ...carryOver(draft), id: uid('item_') });
+      // Einkaufs- und Fixpreis gehören zur einzelnen Karte, nicht zur Kiste
+      setPurchaseInput('');
+      setFixedInput('');
       setSuggestions([]);
       setShowSuggestions(false);
       setSaving(false);
@@ -374,26 +383,34 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
 
       <div className="field-row">
         <div>
-          <label htmlFor="purchase">Einkaufspreis pro Stück (EUR)</label>
+          {/* Eingetippt wird in der Währung, in der auch ausgepreist wird;
+              gespeichert wird wie überall in Euro. */}
+          <label htmlFor="purchase">Einkaufspreis pro Stück ({settings.currency})</label>
           <input
             id="purchase"
             type="number"
             step="0.01"
             min={0}
-            value={draft.purchasePrice ?? ''}
-            onChange={(e) => patch({ purchasePrice: e.target.value === '' ? undefined : Number(e.target.value) })}
+            value={purchaseInput}
+            onChange={(e) => {
+              setPurchaseInput(e.target.value);
+              patch({ purchasePrice: e.target.value === '' ? undefined : toEur(Number(e.target.value), settings) });
+            }}
           />
         </div>
         <div>
-          <label htmlFor="fixed">Fixpreis (EUR, optional)</label>
+          <label htmlFor="fixed">Fixpreis ({settings.currency}, optional)</label>
           <input
             id="fixed"
             type="number"
             step="0.01"
             min={0}
             placeholder="überschreibt die Regel"
-            value={draft.fixedPrice ?? ''}
-            onChange={(e) => patch({ fixedPrice: e.target.value === '' ? undefined : Number(e.target.value) })}
+            value={fixedInput}
+            onChange={(e) => {
+              setFixedInput(e.target.value);
+              patch({ fixedPrice: e.target.value === '' ? undefined : toEur(Number(e.target.value), settings) });
+            }}
           />
         </div>
         <div>

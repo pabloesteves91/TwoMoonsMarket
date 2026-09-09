@@ -8,7 +8,8 @@ import { repositoryKind } from '../db';
 import type { Game, Settings } from '../types';
 
 export default function SettingsPage() {
-  const { settings, saveSettings, games, saveGame, deleteGame, refresh, items, priceStats } = useStore();
+  const { settings, saveSettings, games, saveGame, deleteGame, refresh, items, priceStats, publishedRate } =
+    useStore();
   const { user, member, signOut } = useAuth();
   const cloud = repositoryKind() === 'firebase';
   const [draft, setDraft] = useState<Settings>(settings);
@@ -105,25 +106,52 @@ export default function SettingsPage() {
                 </select>
               </div>
               <div>
-                <label htmlFor="rate">Kurs 1 EUR = … CHF</label>
+                <label htmlFor="rate-mode">Kurs</label>
+                <select
+                  id="rate-mode"
+                  disabled={draft.currency !== 'CHF'}
+                  value={draft.rateMode}
+                  onChange={(e) => setDraft({ ...draft, rateMode: e.target.value as Settings['rateMode'] })}
+                >
+                  <option value="auto">automatisch (EZB)</option>
+                  <option value="manual">fest eingestellt</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="rate">1 EUR = … CHF</label>
                 <input
                   id="rate"
                   type="number"
-                  step="0.01"
+                  step="0.0001"
                   min={0}
-                  disabled={draft.currency !== 'CHF'}
-                  value={draft.eurToChf}
+                  disabled={draft.currency !== 'CHF' || draft.rateMode === 'auto'}
+                  value={draft.rateMode === 'auto' && publishedRate ? publishedRate.eurToChf : draft.eurToChf}
                   onChange={(e) => setDraft({ ...draft, eurToChf: Number(e.target.value) })}
                 />
               </div>
             </div>
             <p className="small dim" style={{ margin: 0 }}>
-              Preise werden intern immer in EUR gespeichert (Cardmarket-Basis). Der Kurs wird manuell gepflegt.
+              Cardmarket rechnet in Euro, deshalb liegen die Preise intern in Euro. Umgerechnet wird erst für
+              Anzeige und Auspreisung – Rundung und Mindestpreis greifen dabei in {draft.currency}.{' '}
+              {draft.currency !== 'CHF' ? null : draft.rateMode === 'auto' ? (
+                publishedRate ? (
+                  <>
+                    Der Kurs kommt mit dem wöchentlichen Preislauf: <strong>{publishedRate.eurToChf}</strong>{' '}
+                    ({publishedRate.source}, Stand {publishedRate.date}).
+                  </>
+                ) : (
+                  <>
+                    Noch kein Kurs abgeholt – bis dahin gilt der eingetragene Wert von {draft.eurToChf}.
+                  </>
+                )
+              ) : (
+                <>Der Kurs bleibt bei {draft.eurToChf}, bis er hier geändert wird.</>
+              )}
             </p>
 
             <div className="field-row">
               <div>
-                <label htmlFor="min-delta">Freigabe ab … EUR Abweichung</label>
+                <label htmlFor="min-delta">Freigabe ab … {draft.currency} Abweichung</label>
                 <input
                   id="min-delta"
                   type="number"

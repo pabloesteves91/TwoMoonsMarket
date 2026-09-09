@@ -3,13 +3,14 @@ import Modal from '../components/Modal';
 import RuleEditor from '../components/RuleEditor';
 import { useStore } from '../store';
 import { formatMoney } from '../lib/format';
-import { roundPrice, setOverrideId } from '../lib/pricing';
+import { applyRule, setOverrideId } from '../lib/pricing';
 import { PRICE_BASIS_LABELS, type PricingRule, type RuleOverride, type Settings } from '../types';
 import { uid } from '../lib/format';
 
 /** Beispielrechnung, damit die Wirkung einer Regel sofort sichtbar ist. */
-function example(rule: PricingRule, base: number): number {
-  return Math.max(roundPrice(base * (1 + rule.markupPercent / 100), rule.rounding), rule.minPrice);
+/** Beispielpreis – rechnet genau wie der Verkaufspreis im Bestand. */
+function example(rule: PricingRule, base: number, settings: Settings): number {
+  return applyRule(base, rule, settings);
 }
 
 export default function Rules() {
@@ -64,8 +65,8 @@ export default function Rules() {
           />
           <p className="small muted" style={{ marginTop: 12, marginBottom: 0 }}>
             Beispiel: Basis 10.00 EUR → Verkauf{' '}
-            <strong>{formatMoney(example(draft.nonFoil, 10), draft)}</strong> · Basis 0.15 EUR →{' '}
-            <strong>{formatMoney(example(draft.nonFoil, 0.15), draft)}</strong>
+            <strong>{formatMoney(example(draft.nonFoil, 10, draft), draft)}</strong> · Basis 0.15 EUR →{' '}
+            <strong>{formatMoney(example(draft.nonFoil, 0.15, draft), draft)}</strong>
           </p>
         </div>
 
@@ -80,8 +81,8 @@ export default function Rules() {
           />
           <p className="small muted" style={{ marginTop: 12, marginBottom: 0 }}>
             Beispiel: Basis 10.00 EUR → Verkauf{' '}
-            <strong>{formatMoney(example(draft.foil, 10), draft)}</strong> · Basis 0.15 EUR →{' '}
-            <strong>{formatMoney(example(draft.foil, 0.15), draft)}</strong>
+            <strong>{formatMoney(example(draft.foil, 10, draft), draft)}</strong> · Basis 0.15 EUR →{' '}
+            <strong>{formatMoney(example(draft.foil, 0.15, draft), draft)}</strong>
           </p>
         </div>
       </div>
@@ -109,7 +110,7 @@ export default function Rules() {
               .map(
                 (condition) =>
                   `${condition} ${formatMoney(
-                    example(draft.nonFoil, 10) * (draft.conditionFactors[condition] / 100),
+                    example(draft.nonFoil, 10, draft) * (draft.conditionFactors[condition] / 100),
                     draft,
                   )}`,
               )

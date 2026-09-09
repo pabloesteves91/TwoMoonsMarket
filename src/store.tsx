@@ -8,8 +8,14 @@ import {
   type ReactNode,
 } from 'react';
 import { repo } from './db';
-import { uid } from './lib/format';
-import { findNewerPrices, importPricesFromCloud, type CloudImportProgress } from './lib/cloudPrices';
+import { toEur, uid } from './lib/format';
+import {
+  fetchPublishedRate,
+  findNewerPrices,
+  importPricesFromCloud,
+  type CloudImportProgress,
+  type PublishedRate,
+} from './lib/cloudPrices';
 import type { PriceStats } from './db/repository';
 import { buildPriceContext, calculatePrice, findPriceEntry } from './lib/pricing';
 import type {
@@ -49,6 +55,8 @@ interface StoreValue {
   ready: boolean;
   games: Game[];
   settings: Settings;
+  /** Kurs aus dem wöchentlichen Lauf, sofern vorhanden */
+  publishedRate: PublishedRate | null;
   items: InventoryItem[];
   sales: Sale[];
   overrides: RuleOverride[];
@@ -85,6 +93,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [entries, setEntries] = useState<PriceEntry[]>([]);
   const [priceStats, setPriceStats] = useState<PriceStats[]>([]);
   const [priceSync, setPriceSync] = useState<CloudImportProgress | null>(null);
+  /** Kurs aus dem wöchentlichen Lauf – gilt, solange nicht von Hand gepflegt wird */
+  const [publishedRate, setPublishedRate] = useState<PublishedRate | null>(null);
 
   const refresh = useCallback(async () => {
     const [nextGames, nextSettings, nextItems, nextSales, nextOverrides, stats] = await Promise.all([
@@ -124,6 +134,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     void (async () => {
       try {
+        // Der Kurs zuerst: er ist ein paar Byte gross und soll auch dann
+        // stimmen, wenn die Preisliste unverändert blieb.
+        const rate = await fetchPublishedRate();
+        if (rate && !cancelled) setPublishedRate(rate);
+
         const manifest = await findNewerPrices();
         if (!manifest || cancelled) return;
         await importPricesFromCloud(manifest, await repo.getGames(), (progress) => {
@@ -143,8 +158,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [ready, refresh]);
 
+  /**
+   * Einstellungen, wie der Rest der App sie sehen soll.
+   *
+   * Steht der Kurs auf "automatisch", gilt der Wert aus dem wöchentlichen Lauf.
+   * Der gespeicherte Wert bleibt als Rückfall, wenn gerade kein Netz da ist.
+   */
+  const effectiveSettings = useMemo<Settings | null>(() => {
+    if (!settings) return null;
+    if (settings.rateMode === 'manual' || !publishedRate) return settings;
+    return { ...settings, eurToChf: publishedRate.eurToChf };
+  }, [settings, publishedRate]);
+
   const pricedItems = useMemo<PricedItem[]>(() => {
-    if (!settings) return [];
+    if (!effectiveSettings) return [];
+    const settings = effectiveSettings;
     const ctx = buildPriceContext(settings, entries, overrides);
     return items.map((item) => {
       const entry = findPriceEntry(item, ctx);
@@ -170,7 +198,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         neverApproved ||
         (priceDelta !== null &&
           priceDeltaPercent !== null &&
-          Math.abs(priceDelta) >= settings.approvalMinDelta &&
+          Math.abs(priceDelta) >= toEur(settings.approvalMinDelta, settings) &&
           Math.abs(priceDeltaPercent) >= settings.approvalMinPercent);
 
       return {
@@ -188,14 +216,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         needsApproval,
       };
     });
-  }, [items, entries, overrides, settings]);
+  }, [items, entries, overrides, effectiveSettings]);
 
   const value = useMemo<StoreValue | null>(() => {
-    if (!settings) return null;
+    if (!effectiveSettings) return null;
     return {
       ready,
       games,
-      settings,
+      settings: effectiveSettings,
+      publishedRate,
       items,
       sales,
       overrides,
@@ -289,7 +318,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await refresh();
       },
     };
-  }, [ready, games, settings, items, sales, overrides, priceStats, priceSync, pricedItems, refresh]);
+  }, [
+    ready,
+    games,
+    effectiveSettings,
+    publishedRate,
+    items,
+    sales,
+    overrides,
+    priceStats,
+    priceSync,
+    pricedItems,
+    refresh,
+  ]);
 
   if (!value) {
     return (

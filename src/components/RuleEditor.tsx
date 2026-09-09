@@ -1,3 +1,4 @@
+import { useStore } from '../store';
 import {
   PRICE_BASES,
   PRICE_BASIS_LABELS,
@@ -17,6 +18,9 @@ interface RuleEditorProps {
 
 export default function RuleEditor({ value, onChange, optional = false, idPrefix }: RuleEditorProps) {
   const placeholder = optional ? '(Standard)' : '';
+  // Mindestpreis und Rundungsstufe greifen in der Währung, in der ausgepreist wird
+  const { settings } = useStore();
+  const currency = settings.currency;
 
   return (
     <div className="field-row">
@@ -49,7 +53,7 @@ export default function RuleEditor({ value, onChange, optional = false, idPrefix
         />
       </div>
       <div>
-        <label htmlFor={`${idPrefix}-min`}>Mindestpreis (EUR)</label>
+        <label htmlFor={`${idPrefix}-min`}>Mindestpreis ({currency})</label>
         <input
           id={`${idPrefix}-min`}
           type="number"
