@@ -8,6 +8,7 @@ import type {
   RuleOverride,
   Sale,
   Settings,
+  StorageLocation,
 } from '../types';
 
 /**
@@ -24,6 +25,7 @@ export class TwoMoonsDb extends Dexie {
   overrides!: Table<RuleOverride, string>;
   photos!: Table<Photo, string>;
   settings!: Table<Settings, string>;
+  locations!: Table<StorageLocation, string>;
 
   constructor() {
     super('twomoons-market');
@@ -65,6 +67,21 @@ export class TwoMoonsDb extends Dexie {
     this.version(3).stores({
       sales: 'id, soldAt, gameId, itemId, name',
     });
+
+    /** Version 4 führt die Lagerorte als eigene Liste. */
+    this.version(4)
+      .stores({
+        locations: 'id, sortIndex',
+      })
+      .upgrade(async (tx) => {
+        // Die bisher frei getippten Orte werden übernommen, damit nichts
+        // verloren geht und die Auswahl von Anfang an gefüllt ist.
+        const items = await tx.table('items').toArray();
+        const namen = [...new Set(items.map((i) => (i.location ?? '').trim()).filter(Boolean))].sort();
+        await tx.table('locations').bulkPut(
+          namen.map((name, index) => ({ id: `loc_${index + 1}_${Date.now()}`, name, sortIndex: index })),
+        );
+      });
   }
 }
 

@@ -14,7 +14,15 @@ import { WORKSPACE_ID } from './env';
 import { DEFAULT_GAMES, getPriceMetaMap, localRepository } from '../db/localRepository';
 import { DEFAULT_SETTINGS, withDefaults } from '../lib/pricing';
 import type { BackupPayload, PriceStats, Repository } from '../db/repository';
-import type { Game, InventoryItem, Photo, RuleOverride, Sale, Settings } from '../types';
+import type {
+  Game,
+  InventoryItem,
+  Photo,
+  RuleOverride,
+  Sale,
+  Settings,
+  StorageLocation,
+} from '../types';
 
 /**
  * Firestore-Backend.
@@ -96,6 +104,19 @@ export const firebaseRepository: Repository = {
       await batch.commit();
     }
     await localRepository.clearPriceEntries(id);
+  },
+
+  async getLocations() {
+    const snapshot = await getDocs(col('locations'));
+    return snapshot.docs
+      .map((entry) => entry.data() as StorageLocation)
+      .sort((a, b) => a.sortIndex - b.sortIndex || a.name.localeCompare(b.name));
+  },
+  async saveLocation(location) {
+    await setDoc(doc(col('locations'), location.id), clean(location as unknown as Record<string, unknown>));
+  },
+  async deleteLocation(id) {
+    await deleteDoc(doc(col('locations'), id));
   },
 
   async getSettings() {

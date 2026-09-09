@@ -51,6 +51,7 @@ await env.withSecurityRulesDisabled(async (ctx) => {
     name: 'Heliod', quantity: 1, unitPrice: 18.6, soldBy: 'chefin', soldAt: jetzt, itemId: 'karte1',
   });
   await setDoc(doc(db, `workspaces/${WS}/settings/settings`), { currency: 'CHF' });
+  await setDoc(doc(db, `workspaces/${WS}/locations/vitrine`), { id: 'vitrine', name: 'Vitrine', sortIndex: 0 });
 });
 
 const tresen = env.authenticatedContext('tresen').firestore();
@@ -82,6 +83,9 @@ await pruefe('Verkauf auf eigenen Namen buchen', assertSucceeds(
 await pruefe('eigenen Verkauf von heute zurücknehmen', assertSucceeds(
   deleteDoc(doc(tresen, `workspaces/${WS}/sales/heute`))));
 await pruefe('Einstellungen lesen', assertSucceeds(getDoc(doc(tresen, `workspaces/${WS}/settings/settings`))));
+await pruefe('Karte an einen anderen Lagerort umlagern', assertSucceeds(
+  updateDoc(doc(tresen, `workspaces/${WS}/items/karte1`), { location: 'Event', updatedAt: Date.now() })));
+await pruefe('Lagerorte lesen', assertSucceeds(getDoc(doc(tresen, `workspaces/${WS}/locations/vitrine`))));
 
 console.log('\n=== Verkaufskonto: das soll nicht gehen ===');
 await pruefe('Verkauf auf fremden Namen buchen', assertFails(
@@ -99,6 +103,10 @@ await pruefe('Kartennamen ändern', assertFails(
 await pruefe('Karte anlegen', assertFails(
   setDoc(doc(tresen, `workspaces/${WS}/items/neu`), { name: 'x', quantity: 1 })));
 await pruefe('Karte löschen', assertFails(deleteDoc(doc(tresen, `workspaces/${WS}/items/karte1`))));
+await pruefe('Lagerort anlegen', assertFails(
+  setDoc(doc(tresen, `workspaces/${WS}/locations/neu`), { name: 'Heimlich', sortIndex: 9 })));
+await pruefe('Lagerort umbenennen', assertFails(
+  updateDoc(doc(tresen, `workspaces/${WS}/locations/vitrine`), { name: 'anders' })));
 await pruefe('Einstellungen ändern', assertFails(
   setDoc(doc(tresen, `workspaces/${WS}/settings/settings`), { currency: 'EUR' })));
 await pruefe('Preisregeln ändern', assertFails(
@@ -115,6 +123,8 @@ await pruefe('alten Verkauf stornieren', assertSucceeds(
   deleteDoc(doc(chefin, `workspaces/${WS}/sales/gestern`))));
 await pruefe('Einstellungen ändern', assertSucceeds(
   setDoc(doc(chefin, `workspaces/${WS}/settings/settings`), { currency: 'CHF' })));
+await pruefe('Lagerort anlegen', assertSucceeds(
+  setDoc(doc(chefin, `workspaces/${WS}/locations/event`), { id: 'event', name: 'Event', sortIndex: 1 })));
 
 console.log('\n=== Konto ohne Rolle: wie bisher volle Rechte ausser Mitglieder ===');
 await pruefe('Karte anlegen', assertSucceeds(

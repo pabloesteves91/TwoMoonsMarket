@@ -6,9 +6,11 @@ import Approvals from './pages/Approvals';
 import Sales from './pages/Sales';
 import Rules from './pages/Rules';
 import SettingsPage from './pages/Settings';
+import { useEffect, useState } from 'react';
 import { useStore } from './store';
 import { formatNumber } from './lib/format';
 import { isStoreOnly, useAuth } from './firebase/authContext';
+import { beobachteFassung } from './lib/version';
 
 /** Täglich gebraucht – diese stehen am Handy in der Leiste unten. */
 const NAV = [
@@ -34,6 +36,14 @@ export default function App() {
    * Security Rules in firestore.rules.
    */
   const storeOnly = isStoreOnly(member);
+
+  /**
+   * Eine geöffnete Seite bleibt sonst auf dem Stand, an dem sie geladen wurde –
+   * am Handy oft tagelang. Nach einer Veröffentlichung sah es dann aus, als sei
+   * nichts geschehen.
+   */
+  const [neueFassung, setNeueFassung] = useState(false);
+  useEffect(() => beobachteFassung(() => setNeueFassung(true)), []);
   const nav = storeOnly ? NAV.filter((entry) => entry.to === '/bestand' || entry.to === '/verkaeufe') : NAV;
   const configNav = storeOnly ? [] : CONFIG_NAV;
   const priceCount = priceStats.reduce((sum, s) => sum + s.count, 0);
@@ -121,6 +131,20 @@ export default function App() {
       </header>
 
       <main className="main">
+        {neueFassung ? (
+          <p className="notice notice--ok" role="status">
+            Eine neuere Fassung der App ist veröffentlicht.{' '}
+            <button
+              type="button"
+              className="btn btn--sm btn--primary"
+              style={{ marginLeft: 4 }}
+              onClick={() => window.location.reload()}
+            >
+              Jetzt laden
+            </button>
+          </p>
+        ) : null}
+
         {priceSync ? (
           <p className="sync" role="status">
             <span className="sync__dot" aria-hidden />

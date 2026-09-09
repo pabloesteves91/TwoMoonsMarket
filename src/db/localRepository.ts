@@ -97,6 +97,17 @@ export const localRepository: Repository = {
     });
   },
 
+  async getLocations() {
+    await ensureSeed();
+    return (await db.locations.toArray()).sort((a, b) => a.sortIndex - b.sortIndex || a.name.localeCompare(b.name));
+  },
+  async saveLocation(location) {
+    await db.locations.put(location);
+  },
+  async deleteLocation(id) {
+    await db.locations.delete(id);
+  },
+
   async getSettings() {
     await ensureSeed();
     const stored = await db.settings.get('settings');
