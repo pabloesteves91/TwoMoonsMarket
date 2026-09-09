@@ -80,16 +80,24 @@ service cloud.firestore {
         allow delete: if isManager() || (isStore() && frischerEigenerVerkauf());
       }
 
-      // Bestand: das Verkaufskonto darf ausschliesslich die Menge bewegen.
-      // Anlegen und Löschen bleiben der Leitung vorbehalten; ausverkaufte
-      // Einträge bleiben mit Menge 0 stehen, damit hier nichts gelöscht werden muss.
+      // Bestand: das Verkaufskonto darf die Menge bewegen und Karten an einen
+      // anderen Lagerort umlagern – etwa vor einem Event. Anlegen und Löschen
+      // bleiben der Leitung vorbehalten; ausverkaufte Einträge bleiben mit
+      // Menge 0 stehen, damit hier nichts gelöscht werden muss.
       match /items/{itemId} {
         allow read: if isMember();
         allow create, delete: if isManager();
         allow update: if isManager()
           || (isStore()
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['quantity', 'updatedAt'])
+              && request.resource.data.diff(resource.data).affectedKeys()
+                   .hasOnly(['quantity', 'location', 'updatedAt'])
               && request.resource.data.quantity >= 0);
+      }
+
+      // Lagerorte: alle lesen und wählen, anlegen und umbenennen nur die Leitung.
+      match /locations/{locationId} {
+        allow read: if isMember();
+        allow write: if isManager();
       }
 
       // Preise, Regeln, Spiele, Fotos, Einstellungen: lesen alle, ändern nur die Leitung.

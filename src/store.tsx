@@ -26,6 +26,7 @@ import type {
   RuleOverride,
   Sale,
   Settings,
+  StorageLocation,
 } from './types';
 
 /** Ein Bestandseintrag zusammen mit seinem berechneten Verkaufspreis. */
@@ -54,6 +55,12 @@ export interface PricedItem {
 interface StoreValue {
   ready: boolean;
   games: Game[];
+  /** Lagerorte als gepflegte Liste – am Tresen wird ausgewählt, nicht getippt */
+  locations: StorageLocation[];
+  saveLocation: (location: StorageLocation) => Promise<void>;
+  deleteLocation: (id: string) => Promise<void>;
+  /** Verschiebt mehrere Einträge an einen Lagerort */
+  moveItems: (itemIds: string[], location: string) => Promise<void>;
   settings: Settings;
   /** Kurs aus dem wöchentlichen Lauf, sofern vorhanden */
   publishedRate: PublishedRate | null;
@@ -118,6 +125,7 @@ export function describeSyncError(err: unknown): string {
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [games, setGames] = useState<Game[]>([]);
+  const [locations, setLocations] = useState<StorageLocation[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -131,16 +139,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [priceSyncError, setPriceSyncError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [nextGames, nextSettings, nextItems, nextSales, nextOverrides, stats] = await Promise.all([
+    const [nextGames, nextSettings, nextItems, nextSales, nextOverrides, stats, nextLocations] = await Promise.all([
       repo.getGames(),
       repo.getSettings(),
       repo.getItems(),
       repo.getSales(),
       repo.getOverrides(),
       repo.getPriceStats(),
+      repo.getLocations(),
     ]);
     const nextEntries = await repo.resolveEntriesForItems(nextItems);
     setGames(nextGames);
+    setLocations(nextLocations);
     setSettings(nextSettings);
     setItems(nextItems);
     setSales(nextSales);
@@ -273,6 +283,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return {
       ready,
       games,
+      locations,
       settings: effectiveSettings,
       publishedRate,
       items,
@@ -360,6 +371,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await repo.deleteSale(saleId);
         await refresh();
       },
+      saveLocation: async (location) => {
+        await repo.saveLocation(location);
+        await refresh();
+      },
+      deleteLocation: async (id) => {
+        await repo.deleteLocation(id);
+        await refresh();
+      },
+      moveItems: async (itemIds, location) => {
+        const wanted = new Set(itemIds);
+        const now = Date.now();
+        for (const item of items) {
+          if (!wanted.has(item.id)) continue;
+          await repo.saveItem({ ...item, location, updatedAt: now });
+        }
+        await refresh();
+      },
       approvePrices: async (itemIds) => {
         const wanted = new Set(itemIds);
         const now = Date.now();
@@ -378,6 +406,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [
     ready,
     games,
+    locations,
     effectiveSettings,
     publishedRate,
     items,
@@ -393,7 +422,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   if (!value) {
     return (
       <div className="boot">
-        <div className="boot__logo">◑◐</div>
+        <img className="boot__logo" src="logo.png" alt="TwoMoons" />
         <p>TwoMoons Market wird geladen …</p>
       </div>
     );

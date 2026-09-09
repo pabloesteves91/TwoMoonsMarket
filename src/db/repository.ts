@@ -1,4 +1,13 @@
-import type { Game, InventoryItem, Photo, PriceEntry, RuleOverride, Sale, Settings } from '../types';
+import type {
+  Game,
+  InventoryItem,
+  Photo,
+  PriceEntry,
+  RuleOverride,
+  Sale,
+  Settings,
+  StorageLocation,
+} from '../types';
 
 /**
  * Datenzugriff der App. Aktuell erfüllt `localRepository` (IndexedDB) diese
@@ -11,6 +20,10 @@ export interface Repository {
   getGames(): Promise<Game[]>;
   saveGame(game: Game): Promise<void>;
   deleteGame(id: string): Promise<void>;
+
+  getLocations(): Promise<StorageLocation[]>;
+  saveLocation(location: StorageLocation): Promise<void>;
+  deleteLocation(id: string): Promise<void>;
 
   getSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<void>;

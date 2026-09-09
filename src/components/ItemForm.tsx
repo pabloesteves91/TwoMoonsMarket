@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Modal from './Modal';
 import PhotoInput from './PhotoInput';
 import { repo } from '../db';
+import { isStoreOnly, useAuth } from '../firebase/authContext';
 import { formatMoney, formatNumber, moneyInput, toEur, uid } from '../lib/format';
 import {
   PRICE_BASES,
@@ -50,7 +51,10 @@ function emptyItem(gameId: string): InventoryItem {
 }
 
 export default function ItemForm({ item, onClose }: ItemFormProps) {
-  const { games, settings, overrides, saveItem, deleteItem, priceStats } = useStore();
+  const { games, settings, overrides, saveItem, deleteItem, priceStats, locations, saveLocation } = useStore();
+  const { member } = useAuth();
+  /** Das Verkaufskonto wählt nur aus; neue Orte legt die Leitung an. */
+  const darfOrteAnlegen = !isStoreOnly(member);
   const [draft, setDraft] = useState<InventoryItem>(item ?? emptyItem(games[0]?.id ?? 'mtg'));
   const [suggestions, setSuggestions] = useState<PriceEntry[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -67,6 +71,9 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
    * Hin- und Herrechnen springen ("12.5" → "12.499999").
    */
   const [purchaseInput, setPurchaseInput] = useState(() => moneyInput(item?.purchasePrice, settings));
+  /** Lagerort anlegen – nur die Leitung sieht diesen Weg */
+  const [legtOrtAn, setLegtOrtAn] = useState(false);
+  const [neuerOrt, setNeuerOrt] = useState('');
   const [fixedInput, setFixedInput] = useState(() => moneyInput(item?.fixedPrice, settings));
   const searchTimer = useRef<number>();
   const nameRef = useRef<HTMLInputElement>(null);
@@ -116,6 +123,19 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
     const ctx = buildPriceContext(settings, matchedEntry ? [matchedEntry] : [], overrides);
     return calculatePrice(draft, matchedEntry, ctx);
   }, [draft, matchedEntry, settings, overrides]);
+
+  /** Legt den getippten Ort an und wählt ihn gleich aus. */
+  async function ortAnlegen() {
+    const name = neuerOrt.trim();
+    if (!name) return;
+    const vorhanden = locations.find((ort) => ort.name.toLowerCase() === name.toLowerCase());
+    if (!vorhanden) {
+      await saveLocation({ id: uid('loc_'), name, sortIndex: locations.length });
+    }
+    patch({ location: vorhanden?.name ?? name });
+    setLegtOrtAn(false);
+    setNeuerOrt('');
+  }
 
   function applySuggestion(entry: PriceEntry) {
     // Set (Abkürzung) und Sammlernummer kommen aus dem Vorschlag, damit beim
@@ -415,14 +435,61 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
         </div>
         <div>
           <label htmlFor="location">Lagerort</label>
-          <input
+          {/* Ausgewählt statt getippt: sonst stehen "Vitrine", "vitrine" und
+              "Vitrinne" nebeneinander und keine Suche findet mehr alles.
+              Anlegen darf nur die Leitung. */}
+          <select
             id="location"
             value={draft.location ?? ''}
-            placeholder="z.B. Box 3 / Vitrine"
-            onChange={(e) => patch({ location: e.target.value })}
-          />
+            onChange={(e) => {
+              if (e.target.value === '__neu') {
+                setNeuerOrt('');
+                setLegtOrtAn(true);
+                return;
+              }
+              patch({ location: e.target.value || undefined });
+            }}
+          >
+            <option value="">(kein Lagerort)</option>
+            {locations.map((ort) => (
+              <option key={ort.id} value={ort.name}>
+                {ort.name}
+              </option>
+            ))}
+            {/* Ein Ort aus einem älteren Eintrag, der nicht mehr in der Liste steht */}
+            {draft.location && !locations.some((ort) => ort.name === draft.location) ? (
+              <option value={draft.location}>{draft.location}</option>
+            ) : null}
+            {darfOrteAnlegen ? <option value="__neu">+ Neuer Lagerort …</option> : null}
+          </select>
         </div>
       </div>
+
+      {legtOrtAn ? (
+        <div className="card card--pad-sm" style={{ marginTop: 10 }}>
+          <label htmlFor="neuer-ort">Neuer Lagerort</label>
+          <div className="row" style={{ gap: 8, flexWrap: 'nowrap' }}>
+            <input
+              id="neuer-ort"
+              autoFocus
+              value={neuerOrt}
+              placeholder="z.B. Vitrine, Box 3, Event"
+              onChange={(e) => setNeuerOrt(e.target.value)}
+            />
+            <button
+              type="button"
+              className="btn btn--primary btn--sm"
+              disabled={!neuerOrt.trim()}
+              onClick={() => void ortAnlegen()}
+            >
+              Anlegen
+            </button>
+            <button type="button" className="btn btn--sm" onClick={() => setLegtOrtAn(false)}>
+              Abbrechen
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="card card--pad-sm">
         <label className="checkbox" style={{ marginBottom: useOverride ? 12 : 0 }}>

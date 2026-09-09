@@ -8,6 +8,20 @@
 
 export type GameId = string;
 
+/**
+ * Ein Lagerort: Vitrine, Box 2, Event …
+ *
+ * Als eigene Liste statt als freier Text, damit am Tresen nur ausgewählt und
+ * nicht getippt wird – sonst stehen "Vitrine", "vitrine" und "Vitrinne"
+ * nebeneinander und keine Suche findet mehr alles.
+ */
+export interface StorageLocation {
+  id: string;
+  name: string;
+  /** Reihenfolge in der Auswahl */
+  sortIndex: number;
+}
+
 export interface Game {
   id: GameId;
   /** Anzeigename, z.B. "Magic: The Gathering" */

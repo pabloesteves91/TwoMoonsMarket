@@ -12,7 +12,17 @@ import { repo } from '../db';
 type SortKey = 'name' | 'set' | 'quantity' | 'price' | 'total' | 'margin' | 'updated';
 
 export default function Inventory() {
-  const { pricedItems, settings, games, gameById, saveItem, refresh } = useStore();
+  const { pricedItems, settings, games, gameById, saveItem, refresh, locations, moveItems } = useStore();
+  /**
+   * Umlagern: vor einem Event wandern Karten in den Lagerort "Event" und
+   * danach zurück. Einzeln über das Formular wären das Dutzende Handgriffe,
+   * deshalb hier mehrere auf einmal. Auch das Verkaufskonto darf das – es
+   * wählt aus der Liste, anlegen darf es keine Orte.
+   */
+  const [umlagern, setUmlagern] = useState(false);
+  const [ausgewaehlt, setAusgewaehlt] = useState<Set<string>>(new Set());
+  const [zielOrt, setZielOrt] = useState('');
+  const [verschiebt, setVerschiebt] = useState(false);
   const { member } = useAuth();
   /** Verkaufskonto: keine Einkaufszahlen, kein Anlegen, kein Bearbeiten. */
   const storeOnly = isStoreOnly(member);
@@ -42,6 +52,38 @@ export default function Inventory() {
       if (Object.keys(next).length) setPhotos((prev) => ({ ...prev, ...next }));
     });
   }, [pricedItems, photos]);
+
+  function umschalten(id: string) {
+    setAusgewaehlt((vorher) => {
+      const naechste = new Set(vorher);
+      if (naechste.has(id)) naechste.delete(id);
+      else naechste.add(id);
+      return naechste;
+    });
+  }
+
+  function beenden() {
+    setUmlagern(false);
+    setAusgewaehlt(new Set());
+    setZielOrt('');
+  }
+
+  /** Alle gerade sichtbaren Zeilen an- oder abwählen. */
+  function alleWaehlen() {
+    setAusgewaehlt((vorher) =>
+      vorher.size === rows.length ? new Set() : new Set(rows.map((row) => row.item.id)),
+    );
+  }
+
+  async function verschieben() {
+    setVerschiebt(true);
+    try {
+      await moveItems([...ausgewaehlt], zielOrt === '__leer' ? '' : zielOrt);
+      beenden();
+    } finally {
+      setVerschiebt(false);
+    }
+  }
 
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -195,6 +237,45 @@ export default function Inventory() {
         </button>
       </div>
 
+      {/* Umlagern steht beiden Rollen offen – vor einem Event zählt Tempo,
+          und ein Lagerort ist keine Preisänderung. */}
+      {rows.length > 0 ? (
+        <div className="toolbar" style={{ marginBottom: 12 }}>
+          {umlagern ? (
+            <>
+              <strong>{ausgewaehlt.size} ausgewählt</strong>
+              <select value={zielOrt} onChange={(e) => setZielOrt(e.target.value)} aria-label="Ziel-Lagerort">
+                <option value="">Ziel wählen …</option>
+                {locations.map((ort) => (
+                  <option key={ort.id} value={ort.name}>
+                    {ort.name}
+                  </option>
+                ))}
+                <option value="__leer">(kein Lagerort)</option>
+              </select>
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={ausgewaehlt.size === 0 || !zielOrt || verschiebt}
+                onClick={() => void verschieben()}
+              >
+                {verschiebt ? 'Verschiebt …' : 'Verschieben'}
+              </button>
+              <button type="button" className="btn" onClick={() => alleWaehlen()}>
+                {ausgewaehlt.size === rows.length ? 'Auswahl aufheben' : 'Alle sichtbaren'}
+              </button>
+              <button type="button" className="btn btn--ghost" onClick={() => beenden()}>
+                Fertig
+              </button>
+            </>
+          ) : (
+            <button type="button" className="btn" onClick={() => setUmlagern(true)}>
+              Umlagern …
+            </button>
+          )}
+        </div>
+      ) : null}
+
       {rows.length === 0 ? (
         <div className="empty">
           <div className="empty__icon">▦</div>
@@ -218,7 +299,16 @@ export default function Inventory() {
             <table>
               <thead>
                 <tr>
-                  <th style={{ width: 46 }} />
+                  <th style={{ width: 46 }}>
+                    {umlagern ? (
+                      <input
+                        type="checkbox"
+                        aria-label="Alle sichtbaren auswählen"
+                        checked={ausgewaehlt.size === rows.length && rows.length > 0}
+                        onChange={() => alleWaehlen()}
+                      />
+                    ) : null}
+                  </th>
                   <th className="is-sortable" onClick={() => toggleSort('name')}>
                     Karte
                   </th>
@@ -247,9 +337,16 @@ export default function Inventory() {
                 {rows.map((row) => {
                   const game = gameById.get(row.item.gameId);
                   return (
-                    <tr key={row.item.id}>
+                    <tr key={row.item.id} className={ausgewaehlt.has(row.item.id) ? 'is-picked' : undefined}>
                       <td>
-                        {row.item.photoId && photos[row.item.photoId] ? (
+                        {umlagern ? (
+                          <input
+                            type="checkbox"
+                            aria-label={`${row.item.name} auswählen`}
+                            checked={ausgewaehlt.has(row.item.id)}
+                            onChange={() => umschalten(row.item.id)}
+                          />
+                        ) : row.item.photoId && photos[row.item.photoId] ? (
                           <img className="thumb" src={photos[row.item.photoId]} alt="" />
                         ) : (
                           <div className="thumb thumb--empty" aria-hidden>
@@ -348,8 +445,14 @@ export default function Inventory() {
             {rows.map((row) => (
               <div
                 key={row.item.id}
-                className="item-card"
-                onClick={() => (storeOnly ? setSelling(row) : setEditing(row.item))}
+                className={`item-card${umlagern && ausgewaehlt.has(row.item.id) ? ' is-picked' : ''}`}
+                onClick={() =>
+                  umlagern
+                    ? umschalten(row.item.id)
+                    : storeOnly
+                      ? setSelling(row)
+                      : setEditing(row.item)
+                }
               >
                 {row.item.photoId && photos[row.item.photoId] ? (
                   <img className="thumb" src={photos[row.item.photoId]} alt="" />
