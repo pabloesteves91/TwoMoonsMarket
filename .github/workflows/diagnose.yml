@@ -1,0 +1,31 @@
+name: Diagnose
+
+# Läuft nur auf Knopfdruck und veröffentlicht nichts. Zweck: an die echten
+# Cardmarket-Daten kommen, um die Set-Zuordnung zu prüfen – von aussen ist der
+# Katalog nicht abrufbar.
+on:
+  workflow_dispatch:
+  # Auch beim Push auf den Arbeitszweig: "Run workflow" steht erst zur
+  # Verfügung, wenn die Datei auf main liegt.
+  push:
+    branches: ['claude/**']
+    paths:
+      - 'scripts/diagnose-pokemon.mjs'
+      - 'scripts/enrich-pokemon.mjs'
+      - '.github/workflows/diagnose.yml'
+
+concurrency:
+  group: diagnose-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pokemon:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Pokémon-Zuordnung untersuchen
+        run: node scripts/diagnose-pokemon.mjs
