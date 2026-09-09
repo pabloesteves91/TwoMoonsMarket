@@ -207,7 +207,7 @@ async function getJson(url, attempt = 1, maxAttempts = 3) {
  * die Editionen, deren Zuordnung bekannt ist und die deshalb nicht über
  * Namen erraten werden müssen.
  */
-async function loadFromTcgdex(file) {
+export async function loadFromTcgdex(file) {
   const raw = JSON.parse(await readFile(file, 'utf8'));
   const sets = raw.sets ?? [];
   const cards = raw.cards ?? [];
@@ -232,9 +232,17 @@ async function loadFromTcgdex(file) {
       rarity: card.rarity,
       attacks: (card.attacks ?? []).map((attack) => normalizeName(attack)),
     };
-    for (const name of new Set(Object.values(card.names ?? {}))) {
+    // Je Karte einmal pro Schlüssel. Die Namen unterscheiden sich zwischen den
+    // Sprachen oft gar nicht ("Mega Froslass ex" heisst überall so), und zwei
+    // Schreibweisen können auf denselben Schlüssel fallen. Ohne diese Sperre
+    // stünde dieselbe Karte mehrfach in der Liste – die Auswahl unter den
+    // Drucken griffe dann ins Leere: bei drei Drucken und dreifachem Eintrag
+    // bekämen das erste, zweite und dritte Produkt alle denselben.
+    const gesehen = new Set();
+    for (const name of Object.values(card.names ?? {})) {
       const key = normalizeName(name);
-      if (!key) continue;
+      if (!key || gesehen.has(key)) continue;
+      gesehen.add(key);
       const existing = byName.get(key);
       if (existing) existing.push(entry);
       else byName.set(key, [entry]);
@@ -410,7 +418,58 @@ export function choosePrinting(printings, product) {
 
   // Bleiben mehrere übrig, sind es alternative Illustrationen derselben Karte.
   // Cardmarket zählt sie mit (V1), (V2) durch – in der Reihenfolge der Nummern.
-  return candidates[Math.min(product.variant ?? 1, candidates.length) - 1];
+  if ((product.variant ?? 1) > 1) return candidates[Math.min(product.variant, candidates.length) - 1];
+
+  // Ohne solchen Zusatz bleibt nur die Reihenfolge. "Mega Froslass ex" gibt es
+  // in Ascended Heroes dreimal – als 047, 265 und 275, mit identischem Namen
+  // und identischen Attacken. Cardmarket führt dafür mehrere Produkte, deren
+  // Namen sich in nichts unterscheiden. Bisher bekamen alle die 047: drei von
+  // vier Nummern waren damit nachweislich falsch.
+  //
+  // Die Produktnummern von Cardmarket steigen in der Reihenfolge, in der die
+  // Produkte angelegt wurden – dieselbe Reihenfolge, die auch (V1), (V2)
+  // abbildet. Das n-te Produkt bekommt deshalb den n-ten Druck.
+  const position = product.position;
+  if (position !== undefined) {
+    // Mehr Produkte als bekannte Drucke: dann ist nicht zu entscheiden, welcher
+    // gemeint ist. Lieber keine Nummer als eine erfundene – ausgepreist wird
+    // danach.
+    return position <= candidates.length ? candidates[position - 1] : undefined;
+  }
+
+  return candidates[0];
+}
+
+/**
+ * Nummeriert Produkte durch, die in derselben Edition nicht zu unterscheiden
+ * sind – gleicher Name, gleiche Attacken. Sie sind verschiedene Drucke
+ * derselben Karte; welcher gemeint ist, entscheidet erst die Reihenfolge.
+ *
+ * Gruppiert wird nach Name UND Attacken: "Pikachu ex [Thunderbolt]" und
+ * "Pikachu ex [Topaz Bolt]" sind zwei verschiedene Karten und dürfen sich
+ * keine Reihenfolge teilen, sonst verschieben sie einander die Nummern.
+ *
+ * Einzelne Produkte bekommen keine Position – für sie gibt es nichts zu
+ * verteilen.
+ */
+export function assignPositions(produkte) {
+  const nachGruppe = new Map();
+  for (const product of produkte) {
+    const gruppe = `${product.key}|${(product.attacks ?? []).join('|')}`;
+    const liste = nachGruppe.get(gruppe);
+    if (liste) liste.push(product);
+    else nachGruppe.set(gruppe, [product]);
+  }
+  for (const liste of nachGruppe.values()) {
+    if (liste.length < 2) continue;
+    // Die Produktnummern von Cardmarket steigen in der Reihenfolge, in der die
+    // Produkte angelegt wurden.
+    liste.sort((a, b) => a.id - b.id);
+    liste.forEach((product, index) => {
+      product.position = index + 1;
+    });
+  }
+  return produkte;
 }
 
 async function main() {
@@ -451,6 +510,8 @@ async function main() {
       .get(expansionId)
       .push({ id, key, variant: variantOf(product.name), attacks: attacksOf(product.name) });
   }
+  for (const produkte of productsByExpansion.values()) assignPositions(produkte);
+
   console.log(`· Cardmarket: ${products.length.toLocaleString('de-CH')} Produkte in ${groups.size} Editionen`);
 
   const { setsById, byName, setSizes, byCardmarketId } = await loadKnownCards();
@@ -517,6 +578,11 @@ async function main() {
         continue;
       }
       const card = choosePrinting(printings, product);
+      if (!card) {
+        meta[product.id] = { set: code, setName: set?.name };
+        nurSet++;
+        continue;
+      }
       meta[product.id] = { set: code, setName: set?.name, number: card.number, rarity: card.rarity };
       mitNummer++;
     }
