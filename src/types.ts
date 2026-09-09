@@ -50,8 +50,27 @@ export const CONDITION_LABELS: Record<Condition, string> = {
   PO: 'Poor',
 };
 
-export const LANGUAGES = ['DE', 'EN', 'FR', 'IT', 'ES', 'JP', 'PT', 'RU', 'KO', 'CN'] as const;
-export type Language = (typeof LANGUAGES)[number];
+/**
+ * Sprachen zur Auswahl, in der Reihenfolge, in der sie im Laden vorkommen.
+ * Cardmarket führt weitere; die stehen unten als Altbestand, damit früher
+ * erfasste Karten ihre Sprache behalten und nicht stillschweigend umkippen.
+ */
+export const LANGUAGES = ['EN', 'DE', 'JP', 'CN', 'KO', 'FR', 'IT', 'ES'] as const;
+export const LEGACY_LANGUAGES = ['PT', 'RU'] as const;
+export type Language = (typeof LANGUAGES)[number] | (typeof LEGACY_LANGUAGES)[number];
+
+export const LANGUAGE_LABELS: Record<Language, string> = {
+  EN: 'Englisch',
+  DE: 'Deutsch',
+  JP: 'Japanisch',
+  CN: 'Chinesisch',
+  KO: 'Koreanisch',
+  FR: 'Französisch',
+  IT: 'Italienisch',
+  ES: 'Spanisch',
+  PT: 'Portugiesisch',
+  RU: 'Russisch',
+};
 
 /**
  * Ein Preis-Datensatz aus der Cardmarket-Preisliste.

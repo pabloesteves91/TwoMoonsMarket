@@ -11,6 +11,7 @@ import {
   CONDITIONS,
   CONDITION_LABELS,
   LANGUAGES,
+  LANGUAGE_LABELS,
   type Condition,
   type InventoryItem,
   type Language,
@@ -386,9 +387,14 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
             value={draft.language}
             onChange={(e) => patch({ language: e.target.value as Language })}
           >
-            {LANGUAGES.map((language) => (
+            {/* Die eigene Sprache steht immer zur Wahl – sonst verlöre eine
+                früher erfasste Karte beim Speichern stillschweigend ihre. */}
+            {(LANGUAGES.includes(draft.language as (typeof LANGUAGES)[number])
+              ? [...LANGUAGES]
+              : [...LANGUAGES, draft.language]
+            ).map((language) => (
               <option key={language} value={language}>
-                {language}
+                {language} · {LANGUAGE_LABELS[language as Language] ?? language}
               </option>
             ))}
           </select>
