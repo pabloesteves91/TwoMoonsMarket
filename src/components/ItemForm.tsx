@@ -408,6 +408,17 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
             Foil
           </label>
         </div>
+        <div>
+          <label htmlFor="graded">Graded</label>
+          <select
+            id="graded"
+            value={draft.graded ? 'ja' : 'nein'}
+            onChange={(e) => patch({ graded: e.target.value === 'ja' })}
+          >
+            <option value="nein">Nein</option>
+            <option value="ja">Ja</option>
+          </select>
+        </div>
       </div>
 
       <div className="field-row">
