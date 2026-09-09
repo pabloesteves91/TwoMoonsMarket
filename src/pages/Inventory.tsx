@@ -8,6 +8,7 @@ import { formatMoney, formatNumber, downloadFile } from '../lib/format';
 import { buildInventoryCsv, EXPORT_LABELS, type ExportFormat } from '../lib/exporters';
 import { CONDITIONS, type InventoryItem } from '../types';
 import { repo } from '../db';
+import { numberKey } from '../lib/pricing';
 
 type SortKey = 'name' | 'set' | 'quantity' | 'price' | 'total' | 'margin' | 'updated';
 
@@ -97,9 +98,20 @@ export default function Inventory() {
       if (foilFilter === 'normal' && item.foil) return false;
       if (onlyUnpriced && sellPrice !== null) return false;
       if (!query) return true;
-      return [item.name, item.set, item.location, item.note, item.number]
+      // Jedes Suchwort muss irgendwo passen – so findet "m2a 031" die Karte
+      // über Set und Nummer zugleich. Die Nummer wird dabei in der
+      // Vergleichsform geprüft: "031" und "31" sind dieselbe Karte.
+      const felder = [item.name, item.set, item.location, item.note]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query));
+        .map((value) => String(value).toLowerCase());
+      const nummer = item.number ? numberKey(item.number) : '';
+      return query
+        .split(/\s+/)
+        .filter(Boolean)
+        .every(
+          (wort) =>
+            felder.some((value) => value.includes(wort)) || (nummer !== '' && numberKey(wort) === nummer),
+        );
     });
 
     const factor = sort.dir === 'asc' ? 1 : -1;
@@ -198,7 +210,7 @@ export default function Inventory() {
       <div className="toolbar">
         <input
           className="toolbar__search"
-          placeholder="Suchen: Name, Set, Lagerort, Notiz …"
+          placeholder="Suchen: Name, Set + Nr., Lagerort …"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />

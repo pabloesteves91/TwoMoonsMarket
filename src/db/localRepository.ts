@@ -2,7 +2,16 @@ import type { Game, PriceBucket, PriceEntry, Settings } from '../types';
 import { DEFAULT_SETTINGS, withDefaults } from '../lib/pricing';
 import { mergeEntries } from '../lib/cardmarket';
 import { db } from './schema';
-import { buildMatchKey, buildNameKey, bucketsOf, normalize, primaryBucketOf } from '../lib/pricing';
+import {
+  BUCKET_LENGTH,
+  buildMatchKey,
+  buildNameKey,
+  bucketOf,
+  indexBucketsOf,
+  matchesTokens,
+  normalize,
+  primaryBucketOf,
+} from '../lib/pricing';
 import type { BackupPayload, PriceStats, Repository, UpsertOptions } from './repository';
 
 export const DEFAULT_GAMES: Game[] = [
@@ -51,7 +60,7 @@ async function readBuckets(gameId: string, keys: Iterable<string>): Promise<Pric
 function groupIntoBuckets(entries: PriceEntry[]): Map<string, PriceEntry[]> {
   const buckets = new Map<string, PriceEntry[]>();
   for (const entry of entries) {
-    for (const key of bucketsOf(entry.name)) {
+    for (const key of indexBucketsOf(entry.name, entry.set)) {
       const list = buckets.get(key);
       if (list) list.push(entry);
       else buckets.set(key, [entry]);
@@ -198,29 +207,31 @@ export const localRepository: Repository = {
     const tokens = normalized.split(' ').filter((token) => token.length > 0);
     const games = gameId ? [gameId] : (await db.games.toArray()).map((game) => game.id);
 
-    // Einträge liegen im Block jedes ihrer Wörter. Als Einstieg dient das
-    // längste Wort der Eingabe – es ist am trennschärfsten.
-    const probe = tokens.reduce((longest, token) => (token.length > longest.length ? token : longest));
-    const prefix = probe.slice(0, 3);
+    // Einträge liegen im Block jedes ihrer Wörter und in dem ihres Set-
+    // Kürzels. Jedes ausreichend lange Suchwort führt deshalb zu einem Block:
+    // bei "M2A 031" ist das der Block des Sets, bei "Lightning Bolt" der des
+    // Namens. Mehr als vier Blöcke werden nicht gelesen – das genügt, und die
+    // Suche soll auf dem Handy zügig bleiben.
+    const probes = tokens.filter((token) => token.length >= BUCKET_LENGTH).slice(0, 4);
+    // Nur kurze Wörter eingetippt: dann wie bisher über die Blockanfänge suchen.
+    const longest = tokens.reduce((best, token) => (token.length > best.length ? token : best));
 
-    const matches = (name: string): boolean => {
-      const normalizedName = normalize(name);
-      if (normalizedName.startsWith(normalized)) return true;
-      const words = normalizedName.split(' ');
-      return tokens.every((token) => words.some((word) => word.startsWith(token)));
+    const matches = (entry: PriceEntry): boolean => {
+      if (normalize(entry.name).startsWith(normalized)) return true;
+      return matchesTokens(tokens, entry.name, entry.set, entry.number);
     };
 
     const found = new Map<string, PriceEntry>();
     for (const game of games) {
       const buckets =
-        prefix.length >= 3
-          ? await db.priceBuckets.bulkGet([bucketId(game, prefix)])
-          : await db.priceBuckets.where('id').startsWith(bucketId(game, prefix)).toArray();
+        probes.length > 0
+          ? await db.priceBuckets.bulkGet(probes.map((token) => bucketId(game, bucketOf(token))))
+          : await db.priceBuckets.where('id').startsWith(bucketId(game, longest)).toArray();
 
       for (const bucket of buckets) {
         if (!bucket) continue;
         for (const entry of bucket.entries) {
-          if (found.has(entry.id) || !matches(entry.name)) continue;
+          if (found.has(entry.id) || !matches(entry)) continue;
           found.set(entry.id, entry);
           if (found.size >= limit * 8) break;
         }
