@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { repo } from './db';
-import { toEur, uid } from './lib/format';
+import { convert, uid } from './lib/format';
 import {
   fetchPublishedRate,
   findNewerPrices,
@@ -261,14 +261,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         calc.sellPrice === null || approvedPrice === null ? null : calc.sellPrice - approvedPrice;
       const priceDeltaPercent =
         priceDelta === null || !approvedPrice ? null : (priceDelta / approvedPrice) * 100;
-      // Beide Grenzen müssen überschritten sein: ein paar Rappen auf einer teuren
-      // Karte sind ebenso wenig ein Grund zum Umetikettieren wie 20 % auf 10 Rappen.
+      // Jede Änderung gehört auf die Liste – der Laden schreibt die Preise von
+      // Hand auf die Hüllen und will keine verpassen.
+      //
+      // Verglichen wird der Preis, wie er auf der Hülle steht: in der
+      // Anzeigewährung, auf den Rappen. Der Basispreis von Cardmarket bewegt
+      // sich täglich um Bruchteile; solange der aufgeschriebene Preis derselbe
+      // bleibt, gäbe es an der Vitrine nichts Neues zu schreiben.
+      const rappen = (valueEur: number) => Math.round(convert(valueEur, settings) * 100);
       const needsApproval =
         neverApproved ||
-        (priceDelta !== null &&
-          priceDeltaPercent !== null &&
-          Math.abs(priceDelta) >= toEur(settings.approvalMinDelta, settings) &&
-          Math.abs(priceDeltaPercent) >= settings.approvalMinPercent);
+        (calc.sellPrice !== null && approvedPrice !== null && rappen(calc.sellPrice) !== rappen(approvedPrice));
 
       return {
         item,
