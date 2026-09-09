@@ -15,7 +15,19 @@ const get = async (url) => {
 };
 
 const index = await get(`${BASE}/prices/index.json`);
-console.log(`Veröffentlicht: ${index.files.length} Datei(en), Stand ${index.generatedAt ?? index.version ?? 'unbekannt'}`);
+console.log(`Veröffentlicht: ${index.files.length} Datei(en), Stand ${index.createdAt ?? 'unbekannt'}`);
+
+// Der Kurs gehört seit der Franken-Umstellung zur Veröffentlichung: fehlt er,
+// rechnen alle Geräte mit dem Wert aus ihren Einstellungen weiter.
+if (index.rates?.eurToChf) {
+  const { eurToChf, source, date, carriedOver } = index.rates;
+  console.log(
+    `Kurs: 1 EUR = ${eurToChf} CHF (${source}, Stand ${date})${carriedOver ? ' – übernommen, keine Quelle erreichbar' : ''}`,
+  );
+  console.log(`  Probe: 10.00 EUR Trend +15 % → ${(Math.ceil(10 * 1.15 * eurToChf * 10) / 10).toFixed(2)} CHF`);
+} else {
+  console.log('Kurs: FEHLT – die Geräte nehmen den in den Einstellungen gepflegten Wert.');
+}
 
 const gesucht = {
   magic: ['heliophial', 'helionaut', 'helios one', 'gideon, ally of zendikar'],
