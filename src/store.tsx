@@ -8,8 +8,14 @@ import {
   type ReactNode,
 } from 'react';
 import { repo } from './db';
-import { uid } from './lib/format';
-import { findNewerPrices, importPricesFromCloud, type CloudImportProgress } from './lib/cloudPrices';
+import { toEur, uid } from './lib/format';
+import {
+  fetchPublishedRate,
+  findNewerPrices,
+  importPricesFromCloud,
+  type CloudImportProgress,
+  type PublishedRate,
+} from './lib/cloudPrices';
 import type { PriceStats } from './db/repository';
 import { buildPriceContext, calculatePrice, findPriceEntry } from './lib/pricing';
 import type {
@@ -49,12 +55,16 @@ interface StoreValue {
   ready: boolean;
   games: Game[];
   settings: Settings;
+  /** Kurs aus dem wöchentlichen Lauf, sofern vorhanden */
+  publishedRate: PublishedRate | null;
   items: InventoryItem[];
   sales: Sale[];
   overrides: RuleOverride[];
   priceStats: PriceStats[];
   /** Läuft gerade ein automatischer Preisabgleich? */
   priceSync: CloudImportProgress | null;
+  /** Warum der letzte Preisabgleich fehlschlug – null, solange alles gut ging */
+  priceSyncError: string | null;
   pricedItems: PricedItem[];
   gameById: Map<string, Game>;
   refresh: () => Promise<void>;
@@ -75,6 +85,36 @@ interface StoreValue {
 
 const StoreContext = createContext<StoreValue | null>(null);
 
+/**
+ * Übersetzt einen Fehler des Preisabgleichs in einen Satz, mit dem man etwas
+ * anfangen kann.
+ *
+ * Der häufigste Fall ist ein privates Fenster: dort steht nur wenig
+ * Speicherplatz zur Verfügung, und die Preisliste ist mehrere Dutzend Megabyte
+ * gross. Ohne Hinweis sieht man nur bei jeder Karte "kein Preis".
+ */
+export function describeSyncError(err: unknown): string {
+  const error = err as { name?: string; message?: string } | null;
+  const text = `${error?.name ?? ''} ${error?.message ?? ''}`;
+
+  if (/quota|storage|exceeded|NS_ERROR_FILE_NO_DEVICE_SPACE/i.test(text)) {
+    return (
+      'Die Preisliste passt nicht in den Speicher dieses Fensters. In einem privaten Fenster ist er stark ' +
+      'begrenzt – in einem normalen Tab funktioniert es. Der Bestand selbst ist davon nicht betroffen.'
+    );
+  }
+  if (/NetworkError|Failed to fetch|NetworkError when attempting/i.test(text)) {
+    return 'Die Preisliste konnte nicht geladen werden – keine Verbindung. Der nächste Start versucht es erneut.';
+  }
+  if (/InvalidStateError|UnknownError|database/i.test(text)) {
+    return (
+      'Die Preisliste konnte nicht gespeichert werden. Das passiert, wenn der Browser die lokale Datenbank ' +
+      'sperrt – etwa im privaten Modus oder bei blockierten Website-Daten.'
+    );
+  }
+  return `Die Preisliste konnte nicht übernommen werden: ${error?.message ?? 'unbekannter Fehler'}`;
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [games, setGames] = useState<Game[]>([]);
@@ -85,6 +125,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [entries, setEntries] = useState<PriceEntry[]>([]);
   const [priceStats, setPriceStats] = useState<PriceStats[]>([]);
   const [priceSync, setPriceSync] = useState<CloudImportProgress | null>(null);
+  /** Kurs aus dem wöchentlichen Lauf – gilt, solange nicht von Hand gepflegt wird */
+  const [publishedRate, setPublishedRate] = useState<PublishedRate | null>(null);
+  /** Grund, warum der letzte Preisabgleich nicht geklappt hat */
+  const [priceSyncError, setPriceSyncError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const [nextGames, nextSettings, nextItems, nextSales, nextOverrides, stats] = await Promise.all([
@@ -124,15 +168,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     void (async () => {
       try {
+        // Der Kurs zuerst: er ist ein paar Byte gross und soll auch dann
+        // stimmen, wenn die Preisliste unverändert blieb.
+        const rate = await fetchPublishedRate();
+        if (rate && !cancelled) setPublishedRate(rate);
+
         const manifest = await findNewerPrices();
         if (!manifest || cancelled) return;
-        await importPricesFromCloud(manifest, await repo.getGames(), (progress) => {
+        const result = await importPricesFromCloud(manifest, await repo.getGames(), (progress) => {
           if (!cancelled) setPriceSync(progress);
         });
-        if (!cancelled) await refresh();
-      } catch {
-        // Kein Netz oder keine veröffentlichte Liste – der Knopf unter "Preise"
-        // bleibt als Weg von Hand
+        if (cancelled) return;
+        await refresh();
+
+        // Einzelne Dateien werden übersprungen statt den ganzen Lauf zu kippen.
+        // Das ist richtig – aber es darf nicht als Erfolg durchgehen, sonst
+        // steht bei jeder Karte "kein Preis" und niemand weiss warum.
+        if (result.skippedFiles.length > 0) {
+          setPriceSyncError(
+            `${result.skippedFiles.length} von ${result.files + result.skippedFiles.length} Preisdateien konnten ` +
+              'nicht übernommen werden. Bei den betroffenen Karten fehlt der Preis.',
+          );
+        } else if (result.imported === 0) {
+          setPriceSyncError('Die Preisliste kam leer an – bei den Karten fehlt deshalb der Preis.');
+        } else {
+          setPriceSyncError(null);
+        }
+      } catch (err) {
+        // Bisher blieb ein Fehlschlag stumm: die App zeigte bei jeder Karte
+        // "kein Preis", ohne den Grund zu nennen. Jetzt steht er da.
+        if (!cancelled) setPriceSyncError(describeSyncError(err));
       } finally {
         if (!cancelled) setPriceSync(null);
       }
@@ -143,8 +208,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [ready, refresh]);
 
+  /**
+   * Einstellungen, wie der Rest der App sie sehen soll.
+   *
+   * Steht der Kurs auf "automatisch", gilt der Wert aus dem wöchentlichen Lauf.
+   * Der gespeicherte Wert bleibt als Rückfall, wenn gerade kein Netz da ist.
+   */
+  const effectiveSettings = useMemo<Settings | null>(() => {
+    if (!settings) return null;
+    if (settings.rateMode === 'manual' || !publishedRate) return settings;
+    return { ...settings, eurToChf: publishedRate.eurToChf };
+  }, [settings, publishedRate]);
+
   const pricedItems = useMemo<PricedItem[]>(() => {
-    if (!settings) return [];
+    if (!effectiveSettings) return [];
+    const settings = effectiveSettings;
     const ctx = buildPriceContext(settings, entries, overrides);
     return items.map((item) => {
       const entry = findPriceEntry(item, ctx);
@@ -170,7 +248,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         neverApproved ||
         (priceDelta !== null &&
           priceDeltaPercent !== null &&
-          Math.abs(priceDelta) >= settings.approvalMinDelta &&
+          Math.abs(priceDelta) >= toEur(settings.approvalMinDelta, settings) &&
           Math.abs(priceDeltaPercent) >= settings.approvalMinPercent);
 
       return {
@@ -188,19 +266,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         needsApproval,
       };
     });
-  }, [items, entries, overrides, settings]);
+  }, [items, entries, overrides, effectiveSettings]);
 
   const value = useMemo<StoreValue | null>(() => {
-    if (!settings) return null;
+    if (!effectiveSettings) return null;
     return {
       ready,
       games,
-      settings,
+      settings: effectiveSettings,
+      publishedRate,
       items,
       sales,
       overrides,
       priceStats,
       priceSync,
+      priceSyncError,
       pricedItems,
       gameById: new Map(games.map((g) => [g.id, g])),
       refresh,
@@ -289,7 +369,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await refresh();
       },
     };
-  }, [ready, games, settings, items, sales, overrides, priceStats, priceSync, pricedItems, refresh]);
+  }, [
+    ready,
+    games,
+    effectiveSettings,
+    publishedRate,
+    items,
+    sales,
+    overrides,
+    priceStats,
+    priceSync,
+    priceSyncError,
+    pricedItems,
+    refresh,
+  ]);
 
   if (!value) {
     return (

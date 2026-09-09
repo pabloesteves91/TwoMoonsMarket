@@ -1,4 +1,4 @@
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { Link, NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
 import Prices from './pages/Prices';
@@ -26,7 +26,7 @@ const CONFIG_NAV = [
 ];
 
 export default function App() {
-  const { items, priceStats, settings, pricedItems, priceSync } = useStore();
+  const { items, priceStats, settings, pricedItems, priceSync, priceSyncError } = useStore();
   const { user, signOut } = useAuth();
   const priceCount = priceStats.reduce((sum, s) => sum + s.count, 0);
   const pending = pricedItems.filter((row) => row.needsApproval).length;
@@ -115,6 +115,11 @@ export default function App() {
                 ? 'wird gelesen'
                 : 'wird gespeichert'}{' '}
             ({Math.min(priceSync.index + 1, priceSync.total)}/{priceSync.total}). Die App ist währenddessen benutzbar.
+          </p>
+        ) : priceSyncError ? (
+          <p className="notice notice--warn" role="status">
+            {priceSyncError}{' '}
+            <Link to="/preise">Preise von Hand laden</Link>
           </p>
         ) : null}
 

@@ -1,9 +1,16 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore, type PricedItem } from '../store';
-import { formatDate, formatMoney, formatNumber, formatPercent, downloadFile } from '../lib/format';
+import {
+  convert,
+  downloadFile,
+  formatDate,
+  formatDisplay,
+  formatMoney,
+  formatNumber,
+  formatPercent,
+} from '../lib/format';
 import { toCsv } from '../lib/csv';
-import { convert } from '../lib/format';
 
 /**
  * Preisfreigabe: vergleicht den Preis am Kärtchen (zuletzt freigegeben) mit dem
@@ -163,7 +170,7 @@ export default function Approvals() {
           <p>
             Nichts zu tun – alle Preise am Kärtchen entsprechen der aktuellen Berechnung
             {settings.approvalMinDelta > 0
-              ? ` (Schwelle: ${formatMoney(settings.approvalMinDelta, settings)} und ${settings.approvalMinPercent} %)`
+              ? ` (Schwelle: ${formatDisplay(settings.approvalMinDelta, settings)} und ${settings.approvalMinPercent} %)`
               : ''}
             .
           </p>

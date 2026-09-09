@@ -1,5 +1,5 @@
 import type { Game, PriceBucket, PriceEntry, Settings } from '../types';
-import { DEFAULT_SETTINGS } from '../lib/pricing';
+import { DEFAULT_SETTINGS, withDefaults } from '../lib/pricing';
 import { mergeEntries } from '../lib/cardmarket';
 import { db } from './schema';
 import { buildMatchKey, buildNameKey, bucketsOf, normalize, primaryBucketOf } from '../lib/pricing';
@@ -99,9 +99,12 @@ export const localRepository: Repository = {
 
   async getSettings() {
     await ensureSeed();
-    const settings = await db.settings.get('settings');
+    const stored = await db.settings.get('settings');
     // Fehlende Felder aus Defaults ergänzen (Schema-Erweiterungen)
-    return { ...DEFAULT_SETTINGS, ...settings, id: 'settings' } as Settings;
+    const { settings, migrated } = withDefaults(stored as Partial<Settings> | undefined);
+    // Die Umstellung einmal festschreiben, sonst käme sie bei jedem Start wieder
+    if (migrated) await db.settings.put({ ...settings, id: 'settings' });
+    return settings;
   },
   async saveSettings(settings) {
     await db.settings.put({ ...settings, id: 'settings' });

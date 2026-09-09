@@ -264,7 +264,7 @@ export default function Inventory() {
                           {row.needsApproval && !row.neverApproved ? (
                             <span
                               className="badge badge--warn"
-                              title={`Kärtchen: ${row.approvedPrice?.toFixed(2)} EUR – berechnet: ${row.calc.sellPrice?.toFixed(2)} EUR`}
+                              title={`Kärtchen: ${formatMoney(row.approvedPrice, settings)} – berechnet: ${formatMoney(row.calc.sellPrice, settings)}`}
                             >
                               Preis geändert
                             </span>

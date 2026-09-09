@@ -1,22 +1,64 @@
 import type { Settings } from '../types';
 
-/** Rechnet einen EUR-Betrag in die Anzeigewährung um. */
-export function convert(amountEur: number, settings: Pick<Settings, 'currency' | 'eurToChf'>): number {
-  return settings.currency === 'CHF' ? amountEur * settings.eurToChf : amountEur;
+/**
+ * Kurs von EUR in die Anzeigewährung.
+ *
+ * Ein Kurs von 0 oder ein leeres Feld würde jede Rechnung zerstören – dann
+ * bleibt es bei 1, also beim Euro-Betrag.
+ */
+export function rate(settings: Pick<Settings, 'currency' | 'eurToChf'>): number {
+  return settings.currency === 'CHF' && settings.eurToChf > 0 ? settings.eurToChf : 1;
 }
 
+/** Rechnet einen EUR-Betrag in die Anzeigewährung um. */
+export function convert(amountEur: number, settings: Pick<Settings, 'currency' | 'eurToChf'>): number {
+  return amountEur * rate(settings);
+}
+
+/** Rechnet einen Betrag aus der Anzeigewährung zurück in EUR (so wird gespeichert). */
+export function toEur(amountDisplay: number, settings: Pick<Settings, 'currency' | 'eurToChf'>): number {
+  return amountDisplay / rate(settings);
+}
+
+/**
+ * Bereitet einen gespeicherten EUR-Betrag für ein Eingabefeld auf.
+ * Leere Felder bleiben leer, damit "kein Wert" nicht als 0.00 erscheint.
+ */
+export function moneyInput(
+  amountEur: number | null | undefined,
+  settings: Pick<Settings, 'currency' | 'eurToChf'>,
+): string {
+  if (amountEur === null || amountEur === undefined || Number.isNaN(amountEur)) return '';
+  return (Math.round(convert(amountEur, settings) * 100) / 100).toString();
+}
+
+/**
+ * Formatiert einen Betrag, der bereits in der Anzeigewährung vorliegt.
+ *
+ * Nötig für Werte, die so eingegeben und gespeichert werden – etwa die
+ * Freigabeschwelle. `formatMoney` würde sie ein zweites Mal umrechnen.
+ */
+export function formatDisplay(
+  amount: number | null | undefined,
+  settings: Pick<Settings, 'currency' | 'eurToChf'>,
+  options: { showCode?: boolean } = {},
+): string {
+  if (amount === null || amount === undefined || Number.isNaN(amount)) return '–';
+  const formatted = new Intl.NumberFormat('de-CH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+  return options.showCode === false ? formatted : `${formatted} ${settings.currency}`;
+}
+
+/** Formatiert einen in EUR gespeicherten Betrag in der Anzeigewährung. */
 export function formatMoney(
   amountEur: number | null | undefined,
   settings: Pick<Settings, 'currency' | 'eurToChf'>,
   options: { showCode?: boolean } = {},
 ): string {
   if (amountEur === null || amountEur === undefined || Number.isNaN(amountEur)) return '–';
-  const value = convert(amountEur, settings);
-  const formatted = new Intl.NumberFormat('de-CH', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-  return options.showCode === false ? formatted : `${formatted} ${settings.currency}`;
+  return formatDisplay(convert(amountEur, settings), settings, options);
 }
 
 export function formatNumber(value: number): string {

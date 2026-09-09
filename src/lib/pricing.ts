@@ -162,6 +162,33 @@ export function findPriceEntry(item: InventoryItem, ctx: PriceContext): PriceEnt
  * Reihenfolge der Regeln (spezifisch schlägt allgemein):
  *   Fixpreis am Eintrag > Eintrags-Override > Karten-Override > Set-Override > globale Foil/Non-Foil-Regel
  */
+/** Kurs von EUR in die Anzeigewährung; 1, solange in Euro ausgepreist wird. */
+export function displayRate(settings: Pick<Settings, 'currency' | 'eurToChf'>): number {
+  return settings.currency === 'CHF' && settings.eurToChf > 0 ? settings.eurToChf : 1;
+}
+
+/**
+ * Wendet eine Regel auf einen Euro-Betrag an und liefert wieder Euro.
+ *
+ * Gerundet wird in der Währung, in der ausgepreist wird: eine saubere Stufe in
+ * Euro ergäbe sonst einen krummen Franken-Betrag. Mindestpreis und
+ * Rundungsstufe sind deshalb Beträge in der Anzeigewährung.
+ *
+ * Dieselbe Rechnung steht hinter dem Verkaufspreis und hinter den Beispielen
+ * auf der Regelseite – sonst zeigten beide verschiedene Zahlen.
+ */
+export function applyRule(
+  baseEur: number,
+  rule: Pick<PricingRule, 'markupPercent' | 'rounding' | 'minPrice'>,
+  settings: Pick<Settings, 'currency' | 'eurToChf'>,
+  conditionFactor = 1,
+): number {
+  const rate = displayRate(settings);
+  const withMarkup = baseEur * (1 + rule.markupPercent / 100) * conditionFactor;
+  const inDisplay = Math.max(roundPrice(withMarkup * rate, rule.rounding), rule.minPrice);
+  return inDisplay / rate;
+}
+
 export function calculatePrice(
   item: InventoryItem,
   entry: PriceEntry | undefined,
@@ -219,8 +246,7 @@ export function calculatePrice(
     };
   }
 
-  const withMarkup = found.value * (1 + rule.markupPercent / 100) * conditionFactor;
-  const sellPrice = Math.max(roundPrice(withMarkup, rule.rounding), rule.minPrice);
+  const sellPrice = applyRule(found.value, rule, ctx.settings, conditionFactor);
 
   return {
     sellPrice: round2(sellPrice),
@@ -281,9 +307,33 @@ export const DEFAULT_SETTINGS: Settings = {
   foil: { basis: 'trend', markupPercent: 15, minPrice: 0.2, rounding: '0.10' },
   conditionFactors: DEFAULT_CONDITION_FACTORS,
   applyConditionFactors: false,
-  currency: 'EUR',
-  eurToChf: 0.95,
+  currency: 'CHF',
+  eurToChf: 0.94,
+  rateMode: 'auto',
   companyName: 'TwoMoons AG, Dübendorf',
   approvalMinDelta: 0.2,
   approvalMinPercent: 5,
 };
+
+/**
+ * Ergänzt fehlende Felder eines gespeicherten Einstellungssatzes.
+ *
+ * Einmalige Umstellung: Sätze, die noch vor der Währungsumstellung gespeichert
+ * wurden, erkennt man am fehlenden `rateMode`. Der Laden preist in Franken aus,
+ * deshalb wird dabei auf CHF mit automatischem Kurs gestellt. Wer lieber in
+ * Euro rechnet, stellt es in den Einstellungen zurück – der Satz trägt dann
+ * `rateMode` und wird nicht erneut umgestellt.
+ */
+export function withDefaults(stored: Partial<Settings> | undefined | null): {
+  settings: Settings;
+  migrated: boolean;
+} {
+  if (!stored) return { settings: { ...DEFAULT_SETTINGS }, migrated: false };
+
+  const merged = { ...DEFAULT_SETTINGS, ...stored, id: 'settings' } as Settings;
+  if (stored.rateMode === undefined) {
+    return { settings: { ...merged, currency: 'CHF', rateMode: 'auto' }, migrated: true };
+  }
+  return { settings: merged, migrated: false };
+}
+

@@ -182,10 +182,16 @@ export interface Settings {
   applyConditionFactors: boolean;
   /** Anzeigewährung */
   currency: 'EUR' | 'CHF';
-  /** Manuell gepflegter Kurs 1 EUR = x CHF */
+  /**
+   * Woher der Kurs kommt. "auto" nimmt den Kurs, den der wöchentliche
+   * Preislauf von der Europäischen Zentralbank mitliefert; "manual" den
+   * Wert aus `eurToChf`.
+   */
+  rateMode: 'auto' | 'manual';
+  /** Kurs 1 EUR = x CHF – von Hand gepflegt oder zuletzt automatisch geholt */
   eurToChf: number;
   companyName: string;
-  /** Ab welcher Abweichung eine Karte zur Freigabe vorgeschlagen wird (EUR) */
+  /** Ab welcher Abweichung eine Karte zur Freigabe vorgeschlagen wird, in der Anzeigewährung */
   approvalMinDelta: number;
   /** …und ab welcher prozentualen Abweichung. Beide Grenzen müssen erreicht sein. */
   approvalMinPercent: number;

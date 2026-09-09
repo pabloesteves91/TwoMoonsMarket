@@ -19,9 +19,18 @@ export interface PriceManifestFile {
   bytes?: number;
 }
 
+/** Kurs, den der wöchentliche Lauf mitliefert. */
+export interface PublishedRate {
+  eurToChf: number;
+  source: string;
+  date: string;
+  fetchedAt?: string;
+}
+
 export interface PriceManifest {
   createdAt: string;
   files: PriceManifestFile[];
+  rates?: PublishedRate;
 }
 
 const MANIFEST_URL = 'prices/index.json';
@@ -153,4 +162,16 @@ export async function findNewerPrices(): Promise<PriceManifest | null> {
   const manifest = await fetchPriceManifest();
   if (!manifest) return null;
   return manifest.createdAt === storedPriceVersion() ? null : manifest;
+}
+
+/**
+ * Holt nur den veröffentlichten Kurs.
+ *
+ * Getrennt vom Preisabgleich, weil der Kurs ein paar Byte gross ist und auch
+ * dann gelten soll, wenn die Preisliste unverändert blieb.
+ */
+export async function fetchPublishedRate(): Promise<PublishedRate | null> {
+  const manifest = await fetchPriceManifest();
+  const rate = manifest?.rates;
+  return rate && Number.isFinite(rate.eurToChf) && rate.eurToChf > 0 ? rate : null;
 }
