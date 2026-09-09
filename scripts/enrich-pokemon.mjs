@@ -391,6 +391,12 @@ async function main() {
     }
   }
 
+  // Wie bei Magic: eine leere Datei würde die Sets stillschweigend wieder
+  // entfernen. Dann lieber abbrechen und den letzten Stand behalten.
+  if (Object.keys(meta).length === 0) {
+    throw new Error(`Keine einzige Karte zugeordnet (${matched.size} von ${groups.size} Editionen erkannt).`);
+  }
+
   const file = 'product-meta-pokemon.json';
   await writeFile(`${dir}/${file}`, JSON.stringify(meta), 'utf8');
   console.log(`✓ Pokémon: ${Object.keys(meta).length.toLocaleString('de-CH')} Karten mit Set und Nummer → ${file}`);

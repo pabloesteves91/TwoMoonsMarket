@@ -65,16 +65,27 @@ function addressOf(entry) {
  */
 async function* unpacked(response) {
   const reader = response.body[Symbol.asyncIterator]();
-  const first = await reader.next();
-  if (first.done) return;
+
+  // Ein Stück des Datenstroms darf beliebig klein sein – auch ein einzelnes
+  // Byte. Deshalb wird gesammelt, bis die zwei Bytes der Kennung da sind;
+  // sonst hielte ein zufällig kurzes erstes Stück die gepackte Datei für Text.
+  const head = [];
+  let bytes = 0;
+  while (bytes < 2) {
+    const next = await reader.next();
+    if (next.done) break;
+    head.push(next.value);
+    bytes += next.value.length;
+  }
+  if (bytes === 0) return;
 
   const rest = async function* () {
-    yield first.value;
+    yield* head;
     for (let next = await reader.next(); !next.done; next = await reader.next()) yield next.value;
   };
 
-  const head = first.value;
-  if (head.length >= 2 && head[0] === 0x1f && head[1] === 0x8b) {
+  const kennung = Buffer.concat(head.map((chunk) => Buffer.from(chunk)), 2);
+  if (bytes >= 2 && kennung[0] === 0x1f && kennung[1] === 0x8b) {
     console.log('· Scryfall: Sammeldatei ist gepackt, wird beim Lesen entpackt');
     yield* Readable.from(rest()).pipe(createGunzip());
     return;
@@ -197,6 +208,12 @@ async function main() {
       number: card.collector_number,
       rarity: card.rarity,
     });
+  }
+
+  // Ohne diese Grenze schriebe ein stiller Lesefehler eine leere Datei – und die
+  // Sets verschwänden wieder aus der App, ohne dass es jemandem auffiele.
+  if (byProduct.size === 0) {
+    throw new Error(`Keine Karte mit Cardmarket-Nummer gelesen (${seen} Zeilen). Die Datei wird nicht geschrieben.`);
   }
 
   const file = 'product-meta-magic.json';
