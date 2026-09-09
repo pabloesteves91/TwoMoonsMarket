@@ -87,7 +87,7 @@ export default function Inventory() {
 
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const filtered = pricedItems.filter(({ item, calc }) => {
+    const filtered = pricedItems.filter(({ item, sellPrice }) => {
       // Ausverkaufte Einträge bleiben in der Datenbank – als Gedächtnis für eine
       // Rücknahme –, gehören aber nicht in die Bestandsliste.
       if (item.quantity <= 0) return false;
@@ -95,7 +95,7 @@ export default function Inventory() {
       if (conditionFilter && item.condition !== conditionFilter) return false;
       if (foilFilter === 'foil' && !item.foil) return false;
       if (foilFilter === 'normal' && item.foil) return false;
-      if (onlyUnpriced && calc.sellPrice !== null) return false;
+      if (onlyUnpriced && sellPrice !== null) return false;
       if (!query) return true;
       return [item.name, item.set, item.location, item.note, item.number]
         .filter(Boolean)
@@ -112,7 +112,7 @@ export default function Inventory() {
         case 'quantity':
           return row.item.quantity;
         case 'price':
-          return row.calc.sellPrice ?? -1;
+          return row.sellPrice ?? -1;
         case 'margin':
           return row.margin ?? -Infinity;
         case 'updated':
@@ -369,7 +369,7 @@ export default function Inventory() {
                           <span className="badge">{row.item.condition}</span>
                           <span className="badge">{row.item.language}</span>
                           {row.item.foil ? <span className="badge badge--foil">Foil</span> : null}
-                          {row.calc.sellPrice === null ? (
+                          {row.sellPrice === null ? (
                             <span className="badge badge--warn" title={row.calc.reason}>
                               kein Preis
                             </span>
@@ -410,7 +410,7 @@ export default function Inventory() {
                           </button>
                         </div>
                       </td>
-                      <td className="num">{formatMoney(row.calc.sellPrice, settings, { showCode: false })}</td>
+                      <td className="num">{formatMoney(row.sellPrice, settings, { showCode: false })}</td>
                       <td className="num">{formatMoney(row.totalSell, settings, { showCode: false })}</td>
                       {storeOnly ? null : (
                         <td className={`num ${row.margin === null ? '' : row.margin >= 0 ? 'pos' : 'neg'}`}>
@@ -470,12 +470,27 @@ export default function Inventory() {
                     <span className="badge">{row.item.language}</span>
                     {row.item.foil ? <span className="badge badge--foil">Foil</span> : null}
                     <span className="badge">{row.item.quantity}×</span>
-                    {row.calc.sellPrice === null ? <span className="badge badge--warn">kein Preis</span> : null}
+                    {row.sellPrice === null ? <span className="badge badge--warn">kein Preis</span> : null}
+                    {row.needsApproval && !row.neverApproved ? (
+                      <span className="badge badge--warn">Preis geändert</span>
+                    ) : null}
                   </span>
                 </span>
                 <span className="item-card__price">
-                  <strong>{formatMoney(row.calc.sellPrice, settings, { showCode: false })}</strong>
-                  <span className="cell-sub">{formatMoney(row.totalSell, settings)}</span>
+                  {/* Verkauft wird zum Preis auf dem Kärtchen – den schlägt auch
+                      der Verkaufsdialog vor. Weicht die neue Berechnung davon
+                      ab, stand hier bisher eine andere Zahl als im Dialog, ohne
+                      dass irgendwo stand, warum. Verglichen wird in der
+                      Anzeigewährung: was gleich aussieht, ist gleich. */}
+                  <strong>{formatMoney(row.sellPrice, settings, { showCode: false })}</strong>
+                  {row.calc.sellPrice !== null &&
+                  formatMoney(row.sellPrice, settings) !== formatMoney(row.calc.sellPrice, settings) ? (
+                    <span className="cell-sub" title="Preisliste hat sich geändert – unter Freigabe bestätigen">
+                      neu {formatMoney(row.calc.sellPrice, settings, { showCode: false })}
+                    </span>
+                  ) : (
+                    <span className="cell-sub">{formatMoney(row.totalSell, settings)}</span>
+                  )}
                   <button
                     type="button"
                     className="btn btn--sm"

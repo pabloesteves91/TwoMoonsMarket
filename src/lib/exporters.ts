@@ -27,7 +27,7 @@ export function buildInventoryCsv(rows: PricedItem[], settings: Settings, format
         row.item.language,
         row.item.foil ? 'true' : 'false',
         row.item.quantity,
-        money(row.calc.sellPrice),
+        money(row.sellPrice),
       ]),
     );
   }
@@ -43,7 +43,7 @@ export function buildInventoryCsv(rows: PricedItem[], settings: Settings, format
         row.item.language,
         row.item.foil ? 'ja' : 'nein',
         row.item.quantity,
-        money(row.calc.sellPrice),
+        money(row.sellPrice),
       ]),
     );
   }
@@ -82,7 +82,7 @@ export function buildInventoryCsv(rows: PricedItem[], settings: Settings, format
       row.calc.basis,
       money(row.calc.basePrice),
       row.calc.markupPercent,
-      money(row.calc.sellPrice),
+      money(row.sellPrice),
       money(row.totalSell),
       money(row.item.purchasePrice),
       money(row.margin),
