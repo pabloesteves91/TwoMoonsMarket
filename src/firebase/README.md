@@ -89,6 +89,39 @@ sich alle im Handy-Browser erledigen.
 9. App neu laden – der Bestand ist da und wird ab jetzt zwischen allen
    angemeldeten Geräten geteilt.
 
+### Ein Konto nur zum Verkaufen anlegen
+
+Für den Tresen: ein eigenes Login, das ausschliesslich verkaufen darf.
+
+1. *Authentication → Users → Add user*: eigene E-Mail-Adresse und Passwort,
+   zum Beispiel `laden@twomoons.ch`. Benutzer-ID kopieren.
+2. *Firestore → workspaces/twomoons/members → Dokument hinzufügen*:
+
+   ```
+   Dokument-ID:   <die kopierte Benutzer-ID>
+   Felder:        email (string) = "laden@twomoons.ch"
+                  role  (string) = "store"
+   ```
+
+Damit sieht dieses Konto nur den Bestand und die eigenen Buchungen des Tages.
+Es kann verkaufen – der Preis steht im Dialog und lässt sich vor dem Buchen
+anpassen, etwa für einen Nachlass – und eine eigene Buchung innerhalb von
+24 Stunden zurücknehmen.
+
+Gesperrt sind: Karten anlegen, ändern oder löschen, Einkaufspreise und Marge,
+Preisregeln, Einstellungen, Freigabe, CSV-Export, fremde und ältere Verkäufe.
+
+Verbindlich ist dabei `firestore.rules`, nicht die Oberfläche: was die App
+ausblendet, ist Bequemlichkeit; was in den Regeln steht, hält auch jemanden auf,
+der die Adresse von Hand eintippt. Geprüft wird das bei jedem Lauf mit
+`npm run test:rules` gegen den Firestore-Emulator.
+
+Eine Einschränkung ehrlich: die Regeln filtern keine einzelnen Felder. Der
+Einkaufspreis steht im selben Dokument wie die Karte und ist damit technisch
+lesbar, auch wenn die Oberfläche ihn nicht zeigt. Wer ihn wirklich verbergen
+will, müsste ihn in eine eigene Sammlung auslagern – das ist eine eigene
+Änderung.
+
 ### Für später: Einrichtung mit Rechner
 
 ```bash
@@ -158,7 +191,7 @@ Preislisten wieder lokal.
 ## Struktur in Firestore
 
 ```
-workspaces/{workspaceId}/members/{uid}        { email, role }
+workspaces/{workspaceId}/members/{uid}        { email, role: admin | member | store }
 workspaces/{workspaceId}/items/{itemId}       Bestandseinträge
 workspaces/{workspaceId}/sales/{saleId}       Verkaufshistorie
 workspaces/{workspaceId}/overrides/{id}       Sonderregeln für Sets/Karten

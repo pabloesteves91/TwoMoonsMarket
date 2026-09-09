@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "TCG Collector & Preis-Tracker für TwoMoons AG, Dübendorf",
+  "description": "TCG Collector & Preis-Tracker f\u00fcr TwoMoons AG, D\u00fcbendorf",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -11,7 +11,8 @@
     "typecheck": "tsc -b --noEmit false --emitDeclarationOnly false",
     "import:prices": "node scripts/import-prices.mjs",
     "deploy": "npm run build && npx --yes firebase-tools@latest deploy --only hosting",
-    "deploy:rules": "npx --yes firebase-tools@latest deploy --only firestore:rules"
+    "deploy:rules": "npx --yes firebase-tools@latest deploy --only firestore:rules",
+    "test:rules": "npx --yes firebase-tools@latest emulators:exec --only firestore --project twomoons-rules-test \"node scripts/test-rules.mjs\""
   },
   "dependencies": {
     "dexie": "^4.0.11",
@@ -21,6 +22,7 @@
     "react-router-dom": "^6.28.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/node": "^26.5.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

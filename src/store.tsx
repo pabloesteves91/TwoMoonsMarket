@@ -314,19 +314,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       recordSale: async (sale) => {
         await repo.saveSale(sale);
-        // Verkaufte Menge aus dem Bestand ausbuchen; ist nichts mehr übrig,
-        // verschwindet der Eintrag aus dem Bestand – der Verkauf bleibt.
+        // Verkaufte Menge ausbuchen. Der Eintrag bleibt auch bei Menge 0 stehen,
+        // aus zwei Gründen: die Karte behält Set, Nummer, Foto und Einkaufspreis
+        // für den Fall einer Rücknahme, und das Verkaufskonto kommt so ohne
+        // Löschrechte auf dem Bestand aus. Aus der Liste sind leere Einträge
+        // ausgeblendet, sie sind ja kein Lagerbestand mehr.
         const item = sale.itemId ? items.find((entry) => entry.id === sale.itemId) : undefined;
         if (item) {
-          const rest = item.quantity - sale.quantity;
-          if (rest > 0) await repo.saveItem({ ...item, quantity: rest, updatedAt: Date.now() });
-          else await repo.deleteItem(item.id);
+          const rest = Math.max(0, item.quantity - sale.quantity);
+          await repo.saveItem({ ...item, quantity: rest, updatedAt: Date.now() });
         }
         await refresh();
       },
       cancelSale: async (saleId) => {
         const sale = sales.find((entry) => entry.id === saleId);
-        await repo.deleteSale(saleId);
+        // Erst den Bestand herstellen, dann den Verkauf löschen. Andersherum
+        // stünde bei einem Abbruch dazwischen weder der Verkauf noch die Karte
+        // da – und die Security Rules erkennen den Rückbau am noch
+        // vorhandenen Verkauf.
         if (sale) {
           const item = sale.itemId ? items.find((entry) => entry.id === sale.itemId) : undefined;
           if (item) {
@@ -352,6 +357,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             });
           }
         }
+        await repo.deleteSale(saleId);
         await refresh();
       },
       approvePrices: async (itemIds) => {

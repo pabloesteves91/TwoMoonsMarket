@@ -49,6 +49,12 @@ jobs:
       - name: Typen prüfen und bauen
         run: npm run build
 
+      # Die Rolle "store" ist eine Zugriffsbeschränkung. Was die Oberfläche
+      # ausblendet, ist Bequemlichkeit – verbindlich sind die Security Rules.
+      # Deshalb laufen sie hier gegen den Emulator, bei jedem Lauf.
+      - name: Security Rules prüfen
+        run: npm run test:rules
+
       # Katalog (Kartennamen) und Preisliste werden hier zusammengeführt und auf
       # die Felder eingedampft, die die App auswertet – aus über 100 MB Rohdaten
       # werden so wenige MB, die auch über Mobilfunk zumutbar sind.

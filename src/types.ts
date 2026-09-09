@@ -253,6 +253,10 @@ export interface Sale {
   /** Einkaufspreis pro Stück in EUR zum Zeitpunkt des Verkaufs */
   purchasePrice?: number;
   soldAt: number;
+  /** Konto, das den Verkauf gebucht hat – nur so lässt sich "eigener Verkauf" prüfen */
+  soldBy?: string;
+  /** Anzeigename oder E-Mail des Kontos, damit die Liste lesbar bleibt */
+  soldByEmail?: string;
   channel: SaleChannel;
   note?: string;
   createdAt: number;

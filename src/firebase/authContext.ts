@@ -9,10 +9,30 @@ export interface AuthUser {
   email: string | null;
 }
 
+/**
+ * Rollen im Arbeitsbereich.
+ *
+ * - `admin`  darf alles, auch die Mitgliederliste ändern
+ * - `member` darf alles ausser der Mitgliederliste
+ * - `store`  darf nur verkaufen: Preis bestätigen oder anpassen, sonst nichts.
+ *            Gedacht für Aushilfen am Tresen.
+ */
+export type Role = 'admin' | 'member' | 'store';
+
 export interface Member {
   email?: string;
-  role?: 'admin' | 'member';
+  role?: Role;
   name?: string;
+}
+
+/**
+ * Konto, das nur verkaufen darf.
+ *
+ * Ohne Anmeldung (lokaler Modus zum Ausprobieren) gilt das nicht – dort gibt es
+ * keine Rollen und niemanden, vor dem etwas zu verbergen wäre.
+ */
+export function isStoreOnly(member: Member | null): boolean {
+  return member?.role === 'store';
 }
 
 export interface AuthValue {

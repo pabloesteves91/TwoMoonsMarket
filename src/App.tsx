@@ -8,7 +8,7 @@ import Rules from './pages/Rules';
 import SettingsPage from './pages/Settings';
 import { useStore } from './store';
 import { formatNumber } from './lib/format';
-import { useAuth } from './firebase/authContext';
+import { isStoreOnly, useAuth } from './firebase/authContext';
 
 /** Täglich gebraucht – diese stehen am Handy in der Leiste unten. */
 const NAV = [
@@ -27,7 +27,15 @@ const CONFIG_NAV = [
 
 export default function App() {
   const { items, priceStats, settings, pricedItems, priceSync, priceSyncError } = useStore();
-  const { user, signOut } = useAuth();
+  const { user, member, signOut } = useAuth();
+  /**
+   * Verkaufskonto: sieht nur Bestand und die eigenen Verkäufe des Tages.
+   * Die Sperre in der Oberfläche ist die Bequemlichkeit; verbindlich sind die
+   * Security Rules in firestore.rules.
+   */
+  const storeOnly = isStoreOnly(member);
+  const nav = storeOnly ? NAV.filter((entry) => entry.to === '/bestand' || entry.to === '/verkaeufe') : NAV;
+  const configNav = storeOnly ? [] : CONFIG_NAV;
   const priceCount = priceStats.reduce((sum, s) => sum + s.count, 0);
   const pending = pricedItems.filter((row) => row.needsApproval).length;
   const badges: Record<string, string> = {
@@ -49,7 +57,7 @@ export default function App() {
         </NavLink>
 
         <nav className="nav">
-          {[...NAV, ...CONFIG_NAV].map((entry) => (
+          {[...nav, ...configNav].map((entry) => (
             <NavLink
               key={entry.to}
               to={entry.to}
@@ -90,7 +98,7 @@ export default function App() {
           <span className="brand__name">TwoMoons Market</span>
         </NavLink>
         <span className="row" style={{ gap: 2, flexWrap: 'nowrap' }}>
-          {CONFIG_NAV.map((entry) => (
+          {configNav.map((entry) => (
             <NavLink
               key={entry.to}
               to={entry.to}
@@ -123,20 +131,30 @@ export default function App() {
           </p>
         ) : null}
 
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/bestand" element={<Inventory />} />
-          <Route path="/preise" element={<Prices />} />
-          <Route path="/freigabe" element={<Approvals />} />
-          <Route path="/verkaeufe" element={<Sales />} />
-          <Route path="/regeln" element={<Rules />} />
-          <Route path="/einstellungen" element={<SettingsPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        {/* Beim Verkaufskonto führen auch von Hand eingetippte Adressen nur
+            auf Bestand und die eigenen Verkäufe. */}
+        {storeOnly ? (
+          <Routes>
+            <Route path="/bestand" element={<Inventory />} />
+            <Route path="/verkaeufe" element={<Sales />} />
+            <Route path="*" element={<Navigate to="/bestand" replace />} />
+          </Routes>
+        ) : (
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/bestand" element={<Inventory />} />
+            <Route path="/preise" element={<Prices />} />
+            <Route path="/freigabe" element={<Approvals />} />
+            <Route path="/verkaeufe" element={<Sales />} />
+            <Route path="/regeln" element={<Rules />} />
+            <Route path="/einstellungen" element={<SettingsPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        )}
       </main>
 
       <nav className="tabbar">
-        {NAV.map((entry) => (
+        {nav.map((entry) => (
           <NavLink
             key={entry.to}
             to={entry.to}

@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import Modal from './Modal';
 import { useStore, type PricedItem } from '../store';
+import { useAuth } from '../firebase/authContext';
 import { convert, formatMoney, uid } from '../lib/format';
 import { SALE_CHANNELS, SALE_CHANNEL_LABELS, type Sale, type SaleChannel } from '../types';
 
 /** Bucht einen Verkauf für einen Bestandseintrag. */
 export default function SellForm({ row, onClose }: { row: PricedItem; onClose: () => void }) {
   const { settings, recordSale } = useStore();
+  // Wer gebucht hat, entscheidet später, wer stornieren darf
+  const { user } = useAuth();
   const suggested = row.approvedPrice ?? row.calc.sellPrice ?? 0;
 
   const [quantity, setQuantity] = useState(1);
@@ -53,6 +56,8 @@ export default function SellForm({ row, onClose }: { row: PricedItem; onClose: (
         channel,
         note: note.trim() || undefined,
         createdAt: Date.now(),
+        soldBy: user?.uid,
+        soldByEmail: user?.email ?? undefined,
       };
       await recordSale(sale);
       onClose();
