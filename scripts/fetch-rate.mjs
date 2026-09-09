@@ -8,7 +8,10 @@
  *
  * Quelle ist der Referenzkurs der Europäischen Zentralbank. Antwortet sie
  * nicht, dient Frankfurter als Ausweichweg (dieselben EZB-Daten als JSON).
- * Schlägt beides fehl, bleibt der zuletzt veröffentlichte Kurs stehen.
+ * Schlägt beides fehl, wird der zuletzt veröffentlichte Kurs von der Live-Seite
+ * übernommen – sonst verlören alle Geräte den automatischen Kurs, nur weil eine
+ * Quelle gerade nicht erreichbar war. Die frisch gebaute index.json enthält ihn
+ * nämlich nicht: sie wird im Lauf davor neu geschrieben.
  *
  * Nutzung: node scripts/fetch-rate.mjs [ordner]   (Standard: dist/prices)
  */
@@ -20,6 +23,7 @@ const dir = argv[2] ?? 'dist/prices';
 const UA = 'TwoMoonsMarket/0.1 (+https://github.com/pabloesteves91/TwoMoonsMarket)';
 const ECB = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml';
 const FALLBACK = 'https://api.frankfurter.app/latest?from=EUR&to=CHF';
+const LIVE = process.env.LIVE_URL ?? '';
 
 /** Liest den CHF-Kurs aus der EZB-Tagesdatei. */
 export function parseEcb(xml) {
@@ -31,10 +35,39 @@ export function parseEcb(xml) {
   return Number.isFinite(wert) && wert > 0 ? { rate: wert, date: datum?.[1] } : null;
 }
 
+/** Zeitgrenze je Quelle: der Deploy darf an einem Kursabruf nicht hängen. */
+const TIMEOUT_MS = 15_000;
+
 async function holen(url, wandeln) {
-  const antwort = await fetch(url, { headers: { 'User-Agent': UA } });
+  const antwort = await fetch(url, {
+    headers: { 'User-Agent': UA },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
   if (!antwort.ok) throw new Error(`HTTP ${antwort.status}`);
   return wandeln(await antwort.text());
+}
+
+
+/**
+ * Liest den Kurs aus der Fassung, die gerade veröffentlicht ist.
+ *
+ * Die lokale index.json taugt dafür nicht: sie wurde im Schritt davor neu
+ * geschrieben und trägt nur Dateien und Zeitstempel.
+ */
+async function letzterVeroeffentlichterKurs() {
+  if (!LIVE) return null;
+  try {
+    const antwort = await fetch(`${LIVE}/prices/index.json`, {
+      headers: { 'User-Agent': UA },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (!antwort.ok) return null;
+    const daten = await antwort.json();
+    const wert = Number(daten?.rates?.eurToChf);
+    return Number.isFinite(wert) && wert > 0 ? daten.rates : null;
+  } catch {
+    return null;
+  }
 }
 
 async function main() {
@@ -73,12 +106,15 @@ async function main() {
     }
   }
 
-  // Kein Kurs erreichbar: der zuletzt veröffentlichte bleibt gültig.
-  if (index.rates?.eurToChf) {
-    console.warn(`· Kein neuer Kurs – es gilt weiter ${index.rates.eurToChf} vom ${index.rates.date}`);
-  } else {
-    console.warn('· Kein Kurs hinterlegt – die App nimmt den in den Einstellungen gepflegten Wert.');
+  // Keine Quelle erreichbar: den zuletzt veröffentlichten Kurs übernehmen.
+  const alt = await letzterVeroeffentlichterKurs();
+  if (alt) {
+    index.rates = { ...alt, carriedOver: true };
+    await writeFile(`${dir}/index.json`, JSON.stringify(index, null, 2), 'utf8');
+    console.warn(`· Kein neuer Kurs – der veröffentlichte bleibt: ${alt.eurToChf} vom ${alt.date}`);
+    return;
   }
+  console.warn('· Kein Kurs hinterlegt – die App nimmt den in den Einstellungen gepflegten Wert.');
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

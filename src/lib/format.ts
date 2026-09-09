@@ -32,18 +32,33 @@ export function moneyInput(
   return (Math.round(convert(amountEur, settings) * 100) / 100).toString();
 }
 
+/**
+ * Formatiert einen Betrag, der bereits in der Anzeigewährung vorliegt.
+ *
+ * Nötig für Werte, die so eingegeben und gespeichert werden – etwa die
+ * Freigabeschwelle. `formatMoney` würde sie ein zweites Mal umrechnen.
+ */
+export function formatDisplay(
+  amount: number | null | undefined,
+  settings: Pick<Settings, 'currency' | 'eurToChf'>,
+  options: { showCode?: boolean } = {},
+): string {
+  if (amount === null || amount === undefined || Number.isNaN(amount)) return '–';
+  const formatted = new Intl.NumberFormat('de-CH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+  return options.showCode === false ? formatted : `${formatted} ${settings.currency}`;
+}
+
+/** Formatiert einen in EUR gespeicherten Betrag in der Anzeigewährung. */
 export function formatMoney(
   amountEur: number | null | undefined,
   settings: Pick<Settings, 'currency' | 'eurToChf'>,
   options: { showCode?: boolean } = {},
 ): string {
   if (amountEur === null || amountEur === undefined || Number.isNaN(amountEur)) return '–';
-  const value = convert(amountEur, settings);
-  const formatted = new Intl.NumberFormat('de-CH', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-  return options.showCode === false ? formatted : `${formatted} ${settings.currency}`;
+  return formatDisplay(convert(amountEur, settings), settings, options);
 }
 
 export function formatNumber(value: number): string {
