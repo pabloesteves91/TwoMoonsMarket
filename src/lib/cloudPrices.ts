@@ -42,7 +42,11 @@ const MANIFEST_URL = 'prices/index.json';
  * Nachschlagen. Dieser Merker sagt, welcher Stand das ist – stimmt er nicht mehr
  * mit dem veröffentlichten überein, holt die App die neue Fassung von selbst.
  */
-const VERSION_KEY = 'twomoons.prices.version';
+// Die Zahl am Ende ist der Aufbau der Blöcke, nicht der Preisstand. Seit die
+// Einträge auch im Block ihres Set-Kürzels liegen (Suche "M2A 031"), muss jedes
+// Gerät die Preisliste einmal neu einlesen – ein neuer Schlüssel erledigt das
+// von selbst, ohne dass jemand etwas anklicken muss.
+const VERSION_KEY = 'twomoons.prices.version.2';
 
 export function storedPriceVersion(): string | null {
   try {

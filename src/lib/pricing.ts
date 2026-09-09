@@ -123,6 +123,43 @@ export function bucketsOf(name: string): string[] {
   return words.length > 0 ? [...new Set(words.map(bucketOf))] : ['___'];
 }
 
+/**
+ * Vergleichsform einer Sammlernummer: "031" und "31" sind dieselbe Karte,
+ * "SV107/SV122" wird auf "sv107" verkürzt. Ohne das findet die Suche nach
+ * "M2A 031" die Karte nicht, die in der Preisliste als Nummer 31 steht.
+ */
+export function numberKey(value: string): string {
+  const first = normalize(value).split(' ')[0] ?? '';
+  return first.replace(/^0+(?=.)/, '');
+}
+
+/**
+ * Blöcke, in denen ein Eintrag beim Suchen zu finden sein soll: die seines
+ * Namens und zusätzlich der seines Set-Kürzels. Dadurch führt die Eingabe
+ * "M2A 031" zum Block des Sets, wo die Nummer dann verglichen wird.
+ */
+export function indexBucketsOf(name: string, set?: string): string[] {
+  const keys = bucketsOf(name);
+  const setKey = set ? normalize(set) : '';
+  return setKey ? [...new Set([...keys, bucketOf(setKey)])] : keys;
+}
+
+/**
+ * Passt der Eintrag auf alle Suchwörter? Ein Wort zählt, wenn es einen
+ * Namensteil oder das Set-Kürzel beginnt oder genau die Nummer trifft.
+ */
+export function matchesTokens(tokens: string[], name: string, set?: string, number?: string): boolean {
+  const words = buildWords(name);
+  const setKey = set ? normalize(set) : '';
+  const numKey = number ? numberKey(number) : '';
+  return tokens.every(
+    (token) =>
+      words.some((word) => word.startsWith(token)) ||
+      (setKey !== '' && setKey.startsWith(token)) ||
+      (numKey !== '' && numberKey(token) === numKey),
+  );
+}
+
 /** Der Block, in dem ein Eintrag zuverlässig liegt (erstes Wort des Namens). */
 export function primaryBucketOf(name: string): string {
   return bucketsOf(name)[0];

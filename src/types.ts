@@ -229,9 +229,11 @@ export interface InventoryItem {
   /** Fixpreis pro Stück in EUR – überschreibt jede Regel */
   fixedPrice?: number;
   /**
-   * Zuletzt freigegebener Verkaufspreis pro Stück in EUR – also der Preis, der
-   * am Kärtchen im Laden steht. Der berechnete Preis ändert sich mit jedem
-   * Cardmarket-Import; dieser hier erst, wenn jemand die Änderung übernimmt.
+   * Zuletzt freigegebener Verkaufspreis pro Stück in EUR.
+   *
+   * Verkauft wird zum aktuellen Preis der Regel (Basis + Aufschlag); dieser
+   * Wert ist nur noch das Gedächtnis der Freigabe-Seite und springt als Preis
+   * ein, wenn die Preisliste gar keinen Wert führt.
    */
   approvedPrice?: number;
   approvedAt?: number;
