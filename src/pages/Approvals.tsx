@@ -5,7 +5,6 @@ import {
   convert,
   downloadFile,
   formatDate,
-  formatDisplay,
   formatMoney,
   formatNumber,
   formatPercent,
@@ -30,7 +29,14 @@ export default function Approvals() {
 
   const { changes, firstTime } = useMemo(() => {
     const relevant = pricedItems.filter(
-      (row) => row.needsApproval && row.calc.sellPrice !== null && (!gameFilter || row.item.gameId === gameFilter),
+      (row) =>
+        row.needsApproval &&
+        row.calc.sellPrice !== null &&
+        // Ausverkaufte Einträge bleiben als Gedächtnis für eine Rücknahme in
+        // der Datenbank. An ihnen ist nichts zu beschriften – sie liegen nicht
+        // mehr in der Vitrine.
+        row.item.quantity > 0 &&
+        (!gameFilter || row.item.gameId === gameFilter),
     );
     return {
       changes: relevant
@@ -173,11 +179,7 @@ export default function Approvals() {
         <div className="empty">
           <div className="empty__icon">✓</div>
           <p>
-            Nichts zu tun – auf allen Hüllen steht der aktuelle Preis
-            {settings.approvalMinDelta > 0
-              ? ` (Schwelle: ${formatDisplay(settings.approvalMinDelta, settings)} und ${settings.approvalMinPercent} %)`
-              : ''}
-            .
+            Nichts zu tun – auf allen Hüllen steht der aktuelle Preis.
           </p>
           <Link className="btn" to="/preise">
             Preise aktualisieren
