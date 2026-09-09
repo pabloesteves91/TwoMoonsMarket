@@ -14,6 +14,27 @@ const get = async (url) => {
   return response.json();
 };
 
+// Zuerst: welche Fassung der App liegt überhaupt dort? Ein Merkmal aus dem
+// Quelltext verrät, ob die veröffentlichten Dateien den aktuellen Stand haben –
+// ohne das rätselt man bei "es verhält sich wie vorher" im Nebel.
+const merkmale = [
+  ['Verkaufskonto (Rolle store)', 'Deine Buchungen von heute'],
+  ['Rückgängig-Knopf', 'Rückgängig'],
+  ['Franken-Umstellung', 'automatisch (EZB)'],
+];
+const html = await (await fetch(`${BASE}/index.html`, { cache: 'no-store' })).text();
+const skripte = [...html.matchAll(/src="([^"]*assets\/[^"]+\.js)"/g)].map((m) => m[1]);
+let quelltext = '';
+for (const pfad of skripte) {
+  const antwort = await fetch(`${BASE}/${pfad.replace(/^\//, '')}`);
+  if (antwort.ok) quelltext += await antwort.text();
+}
+console.log(`App: ${skripte.length} Skriptdatei(en), ${(quelltext.length / 1024).toFixed(0)} kB Quelltext`);
+for (const [name, marke] of merkmale) {
+  console.log(`  ${quelltext.includes(marke) ? 'enthalten ' : 'FEHLT     '} ${name}`);
+}
+console.log('');
+
 const index = await get(`${BASE}/prices/index.json`);
 console.log(`Veröffentlicht: ${index.files.length} Datei(en), Stand ${index.createdAt ?? 'unbekannt'}`);
 
