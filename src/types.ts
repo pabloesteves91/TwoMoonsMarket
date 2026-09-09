@@ -238,6 +238,12 @@ export interface InventoryItem {
   language: Language;
   foil: boolean;
   signed?: boolean;
+  /**
+   * Professionell bewertet (PSA, BGS …). Bewusst nur ein Vermerk: der
+   * Cardmarket-Preis gilt für ungeslabte Ware, eine bewertete Karte wird über
+   * den Fixpreis ausgezeichnet.
+   */
+  graded?: boolean;
   quantity: number;
   /** Einkaufspreis pro Stück in EUR */
   purchasePrice?: number;

@@ -381,6 +381,12 @@ export default function Inventory() {
                           <span className="badge">{row.item.condition}</span>
                           <span className="badge">{row.item.language}</span>
                           {row.item.foil ? <span className="badge badge--foil">Foil</span> : null}
+                          {row.item.graded ? (
+                            <span className="badge badge--foil" title="Graded" aria-label="Graded">
+                              ★
+                            </span>
+                          ) : null}
+                          <span className="badge">{row.item.location || 'kein Lagerort'}</span>
                           {row.sellPrice === null ? (
                             <span className="badge badge--warn" title={row.calc.reason}>
                               kein Preis
@@ -474,6 +480,16 @@ export default function Inventory() {
                     <span className="badge">{row.item.language}</span>
                     {row.item.foil ? <span className="badge badge--foil">Foil</span> : null}
                     <span className="badge">{row.item.quantity}×</span>
+                    {/* Ein Stern statt des Wortes: die Zeile ist am Handy schmal,
+                        und bewertete Karten sind die Ausnahme – ein Zeichen genügt. */}
+                    {row.item.graded ? (
+                      <span className="badge badge--foil" title="Graded" aria-label="Graded">
+                        ★
+                      </span>
+                    ) : null}
+                    {/* Wo die Karte liegt, gehört auf die Karte: am Tresen wird
+                        danach gesucht, nicht nach der Menge. */}
+                    <span className="badge">{row.item.location || 'kein Lagerort'}</span>
                     {row.sellPrice === null ? <span className="badge badge--warn">kein Preis</span> : null}
                   </span>
                 </span>
