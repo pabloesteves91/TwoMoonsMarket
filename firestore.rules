@@ -26,8 +26,11 @@ service cloud.firestore {
       }
 
       // Fehlt die Rolle, gilt der bisherige Zustand: volle Rechte ausser Mitglieder.
+      // Gross- und Kleinschreibung ist egal: "Store" und "store" meinen dasselbe.
       function role() {
-        return isMember() && memberDoc().keys().hasAny(['role']) ? memberDoc().role : 'member';
+        return isMember() && memberDoc().keys().hasAny(['role'])
+          ? memberDoc().role.lower()
+          : 'member';
       }
 
       function isAdmin() {
@@ -39,9 +42,14 @@ service cloud.firestore {
         return role() == 'store';
       }
 
-      // Leitung: alles ausser der Mitgliederliste
+      // Leitung: alles ausser der Mitgliederliste.
+      //
+      // Aufgezählt statt "alles ausser store": ein vertippter Rollenname soll
+      // nicht versehentlich volle Rechte geben. Wer etwas Unbekanntes einträgt,
+      // darf lesen und sonst nichts – das fällt auf und ist harmlos, während
+      // der umgekehrte Fehler unbemerkt Türen öffnet.
       function isManager() {
-        return isMember() && !isStore();
+        return isMember() && (role() == 'admin' || role() == 'member');
       }
 
       // Ein Verkauf lässt sich einen Tag lang zurücknehmen. Kalendertage sind in

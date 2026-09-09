@@ -103,6 +103,10 @@ Für den Tresen: ein eigenes Login, das ausschliesslich verkaufen darf.
                   role  (string) = "store"
    ```
 
+   Gross- oder Kleinschreibung spielt keine Rolle, `Store` gilt genauso. Ein
+   Rollenname, den es nicht gibt, führt bewusst zu *weniger* Rechten – lesen ja,
+   ändern nein –, damit ein Tippfehler nicht unbemerkt Türen öffnet.
+
 Damit sieht dieses Konto nur den Bestand und die eigenen Buchungen des Tages.
 Es kann verkaufen – der Preis steht im Dialog und lässt sich vor dem Buchen
 anpassen, etwa für einen Nachlass – und eine eigene Buchung innerhalb von

@@ -34,6 +34,10 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(db, `workspaces/${WS}/members/chefin`), { role: 'admin', email: 'info@twomoons.ch' });
   await setDoc(doc(db, `workspaces/${WS}/members/tresen`), { role: 'store', email: 'laden@twomoons.ch' });
   await setDoc(doc(db, `workspaces/${WS}/members/alt`), { email: 'ohne-rolle@twomoons.ch' });
+  // In der Firebase-Konsole tippt sich "Store" leicht gross
+  await setDoc(doc(db, `workspaces/${WS}/members/tresen2`), { role: 'Store', email: 'laden2@twomoons.ch' });
+  // Und ein Rollenname, den es gar nicht gibt
+  await setDoc(doc(db, `workspaces/${WS}/members/vertippt`), { role: 'verkauf', email: 'huch@twomoons.ch' });
   await setDoc(doc(db, `workspaces/${WS}/items/karte1`), {
     name: 'Heliod, Sun-Crowned', quantity: 3, purchasePrice: 12, updatedAt: jetzt,
   });
@@ -53,6 +57,8 @@ const tresen = env.authenticatedContext('tresen').firestore();
 const chefin = env.authenticatedContext('chefin').firestore();
 const alt = env.authenticatedContext('alt').firestore();
 const fremder = env.authenticatedContext('niemand').firestore();
+const tresenGross = env.authenticatedContext('tresen2').firestore();
+const vertippt = env.authenticatedContext('vertippt').firestore();
 
 let fehler = 0;
 async function pruefe(name, versprechen) {
@@ -115,6 +121,23 @@ await pruefe('Karte anlegen', assertSucceeds(
   setDoc(doc(alt, `workspaces/${WS}/items/neu3`), { name: 'x', quantity: 1, updatedAt: Date.now() })));
 await pruefe('Mitglieder ändern', assertFails(
   setDoc(doc(alt, `workspaces/${WS}/members/tresen`), { role: 'admin' })));
+
+console.log('\n=== Rolle "Store" gross geschrieben: gilt genauso ===');
+await pruefe('Menge ausbuchen erlaubt', assertSucceeds(
+  updateDoc(doc(tresenGross, `workspaces/${WS}/items/karte1`), { quantity: 1, updatedAt: Date.now() })));
+await pruefe('Karte anlegen gesperrt', assertFails(
+  setDoc(doc(tresenGross, `workspaces/${WS}/items/gross`), { name: 'x', quantity: 1 })));
+await pruefe('Einstellungen ändern gesperrt', assertFails(
+  setDoc(doc(tresenGross, `workspaces/${WS}/settings/settings`), { currency: 'EUR' })));
+
+console.log('\n=== Unbekannte Rolle: lesen ja, ändern nein ===');
+await pruefe('Bestand lesen', assertSucceeds(getDoc(doc(vertippt, `workspaces/${WS}/items/karte1`))));
+await pruefe('Karte anlegen gesperrt', assertFails(
+  setDoc(doc(vertippt, `workspaces/${WS}/items/x`), { name: 'x', quantity: 1 })));
+await pruefe('Einstellungen ändern gesperrt', assertFails(
+  setDoc(doc(vertippt, `workspaces/${WS}/settings/settings`), { currency: 'EUR' })));
+await pruefe('Verkauf buchen gesperrt', assertFails(
+  setDoc(doc(vertippt, `workspaces/${WS}/sales/x`), { soldBy: 'vertippt', soldAt: Date.now() })));
 
 console.log('\n=== Konto ohne Freischaltung: nichts ===');
 await pruefe('Bestand lesen', assertFails(getDoc(doc(fremder, `workspaces/${WS}/items/karte1`))));

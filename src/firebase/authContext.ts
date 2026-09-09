@@ -17,7 +17,7 @@ export interface AuthUser {
  * - `store`  darf nur verkaufen: Preis bestätigen oder anpassen, sonst nichts.
  *            Gedacht für Aushilfen am Tresen.
  */
-export type Role = 'admin' | 'member' | 'store';
+export type Role = 'admin' | 'member' | 'store' | (string & {});
 
 export interface Member {
   email?: string;
@@ -32,7 +32,9 @@ export interface Member {
  * keine Rollen und niemanden, vor dem etwas zu verbergen wäre.
  */
 export function isStoreOnly(member: Member | null): boolean {
-  return member?.role === 'store';
+  // Gross- und Kleinschreibung ist egal – in der Firebase-Konsole tippt sich
+  // "Store" ebenso leicht wie "store".
+  return member?.role?.toLowerCase() === 'store';
 }
 
 export interface AuthValue {
