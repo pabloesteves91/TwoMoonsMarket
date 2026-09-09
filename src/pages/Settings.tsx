@@ -174,9 +174,9 @@ export default function SettingsPage() {
               </div>
             </div>
             <p className="small dim" style={{ margin: 0 }}>
-              Beide Grenzen müssen erreicht sein, damit eine Karte in der Preisfreigabe erscheint. So schlägt
-              weder ein paar Rappen auf einer teuren Karte noch ein Prozentsprung auf einer Zehn-Rappen-Karte
-              unnötig Alarm.
+              Beide Grenzen müssen erreicht sein, damit eine Karte unter „Freigabe" zum Neubeschriften
+              erscheint. So schickt euch weder ein paar Rappen auf einer teuren Karte noch ein Prozentsprung
+              auf einer Zehn-Rappen-Karte unnötig an die Vitrine.
             </p>
           </div>
         </div>

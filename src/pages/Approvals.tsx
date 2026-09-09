@@ -13,8 +13,12 @@ import {
 import { toCsv } from '../lib/csv';
 
 /**
- * Preisfreigabe: vergleicht den Preis am Kärtchen (zuletzt freigegeben) mit dem
- * aktuell berechneten. Nur was hier bestätigt wird, gilt als neuer Kärtchenpreis –
+ * Arbeitsliste für die Vitrine: vergleicht den Preis, der auf der Hülle steht
+ * (zuletzt abgehakt), mit dem aktuell berechneten.
+ *
+ * Verkauft wird immer zum aktuellen Preis – diese Seite steuert ihn nicht, sie
+ * sagt nur, welche Hüllen neu beschriftet gehören. Abhaken heisst deshalb
+ * "erledigt", nicht "ab jetzt gilt"; die Karte verschwindet damit aus der Liste –
  * die Karten im Laden werden schliesslich von Hand umetikettiert.
  */
 export default function Approvals() {
@@ -71,7 +75,7 @@ export default function Approvals() {
     try {
       const ids = [...selected];
       await approvePrices(ids);
-      setDone(`${formatNumber(ids.length)} Karten übernommen. Die neuen Preise gelten ab jetzt als Kärtchenpreis.`);
+      setDone(`${formatNumber(ids.length)} Karten abgehakt – die Hüllen tragen jetzt den aktuellen Preis.`);
       setSelected(new Set());
     } finally {
       setBusy(false);
@@ -105,10 +109,11 @@ export default function Approvals() {
     <>
       <div className="page-head">
         <div>
-          <h1>Preisfreigabe</h1>
+          <h1>Freigabe</h1>
           <p>
-            Was sich seit der letzten Auszeichnung bewegt hat. Erst wenn ihr hier bestätigt, gilt der neue Preis
-            als der Preis am Kärtchen – vorher bleibt alles, wie es in der Vitrine steht.
+            Hier stehen die Karten, deren Preis nicht mehr zu dem auf der Hülle passt. Verkauft wird bereits
+            zum aktuellen Preis – schreibt ihn auf die Hülle und hakt die Karte ab, dann verschwindet sie aus
+            der Liste.
           </p>
         </div>
         <div className="page-head__actions">
@@ -131,11 +136,11 @@ export default function Approvals() {
 
       <div className="grid grid--stats" style={{ marginBottom: 18 }}>
         <div className="stat">
-          <div className="stat__label">Zur Freigabe</div>
+          <div className="stat__label">Neu zu beschriften</div>
           <div className="stat__value">{formatNumber(all.length)}</div>
           <div className="stat__hint">
             {formatNumber(changes.length)} {changes.length === 1 ? 'Änderung' : 'Änderungen'} ·{' '}
-            {formatNumber(firstTime.length)} neu auszuzeichnen
+            {formatNumber(firstTime.length)} noch nie beschriftet
           </div>
         </div>
         <div className="stat">
@@ -149,7 +154,7 @@ export default function Approvals() {
           <div className="stat__hint">
             {sums.alt > 0 ? (
               <>
-                bereits ausgezeichnet: {formatMoney(sums.alt, settings)} →{' '}
+                bisher auf der Hülle: {formatMoney(sums.alt, settings)} →{' '}
                 {formatMoney(sums.neuVergleichbar, settings)}{' '}
                 <span className={differenz >= 0 ? 'pos' : 'neg'}>
                   ({differenz >= 0 ? '+' : ''}
@@ -158,7 +163,7 @@ export default function Approvals() {
                 </span>
               </>
             ) : (
-              'alles Erstauszeichnungen – kein Vorher-Wert'
+              'alles noch nie beschriftet – kein Vorher-Wert'
             )}
           </div>
         </div>
@@ -168,7 +173,7 @@ export default function Approvals() {
         <div className="empty">
           <div className="empty__icon">✓</div>
           <p>
-            Nichts zu tun – alle Preise am Kärtchen entsprechen der aktuellen Berechnung
+            Nichts zu tun – auf allen Hüllen steht der aktuelle Preis
             {settings.approvalMinDelta > 0
               ? ` (Schwelle: ${formatDisplay(settings.approvalMinDelta, settings)} und ${settings.approvalMinPercent} %)`
               : ''}
@@ -198,7 +203,7 @@ export default function Approvals() {
               disabled={selected.size === 0 || busy}
               onClick={() => void apply()}
             >
-              {busy ? 'Übernimmt …' : `${formatNumber(selected.size)} übernehmen`}
+              {busy ? 'Hakt ab …' : `${formatNumber(selected.size)} abhaken`}
             </button>
           </div>
 
@@ -215,7 +220,7 @@ export default function Approvals() {
           {firstTime.length > 0 ? (
             <Section
               title="Noch nie ausgezeichnet"
-              hint="Diese Karten haben noch keinen bestätigten Preis. Mit dem Übernehmen wird der berechnete Preis zum Kärtchenpreis."
+              hint="Diese Karten sind noch nie beschriftet worden. Preis auf die Hülle schreiben, dann abhaken."
               rows={firstTime}
               selected={selected}
               onToggle={toggle}

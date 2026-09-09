@@ -111,8 +111,8 @@ export default function Dashboard() {
 
       {pending.length > 0 ? (
         <p className="notice notice--ok" style={{ marginTop: 16 }}>
-          Bei {formatNumber(pending.length)} Karten weicht der berechnete Preis vom Preis am Kärtchen ab.{' '}
-          <Link to="/freigabe">Zur Preisfreigabe</Link>
+          Bei {formatNumber(pending.length)} Karten steht auf der Hülle noch der alte Preis.{' '}
+          <Link to="/freigabe">Zur Freigabe</Link>
         </p>
       ) : null}
 

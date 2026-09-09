@@ -174,8 +174,8 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
         name,
         set: draft.set?.trim() || undefined,
         ruleOverride: useOverride ? draft.ruleOverride ?? {} : undefined,
-        // Neu erfasste Karten bekommen ein Kärtchen mit dem aktuellen Preis –
-        // sie sollen nicht sofort in der Preisfreigabe auftauchen.
+        // Neu erfasste Karten gelten als beschriftet – sie sollen nicht sofort
+        // in der Freigabe stehen, die Hülle wird ja gerade jetzt geschrieben.
         approvedPrice: draft.approvedPrice ?? preview.sellPrice ?? undefined,
         approvedAt: draft.approvedPrice ? draft.approvedAt : preview.sellPrice ? Date.now() : undefined,
         updatedAt: Date.now(),
