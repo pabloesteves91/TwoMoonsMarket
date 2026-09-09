@@ -374,14 +374,6 @@ export default function Inventory() {
                               kein Preis
                             </span>
                           ) : null}
-                          {row.needsApproval && !row.neverApproved ? (
-                            <span
-                              className="badge badge--warn"
-                              title={`Kärtchen: ${formatMoney(row.approvedPrice, settings)} – berechnet: ${formatMoney(row.calc.sellPrice, settings)}`}
-                            >
-                              Preis geändert
-                            </span>
-                          ) : null}
                           {row.calc.ruleSource !== 'global' ? (
                             <span className="badge" title="Abweichende Preisregel">
                               {row.calc.ruleSource === 'fixed' ? 'Fixpreis' : 'Sonderregel'}
@@ -471,26 +463,11 @@ export default function Inventory() {
                     {row.item.foil ? <span className="badge badge--foil">Foil</span> : null}
                     <span className="badge">{row.item.quantity}×</span>
                     {row.sellPrice === null ? <span className="badge badge--warn">kein Preis</span> : null}
-                    {row.needsApproval && !row.neverApproved ? (
-                      <span className="badge badge--warn">Preis geändert</span>
-                    ) : null}
                   </span>
                 </span>
                 <span className="item-card__price">
-                  {/* Verkauft wird zum Preis auf dem Kärtchen – den schlägt auch
-                      der Verkaufsdialog vor. Weicht die neue Berechnung davon
-                      ab, stand hier bisher eine andere Zahl als im Dialog, ohne
-                      dass irgendwo stand, warum. Verglichen wird in der
-                      Anzeigewährung: was gleich aussieht, ist gleich. */}
                   <strong>{formatMoney(row.sellPrice, settings, { showCode: false })}</strong>
-                  {row.calc.sellPrice !== null &&
-                  formatMoney(row.sellPrice, settings) !== formatMoney(row.calc.sellPrice, settings) ? (
-                    <span className="cell-sub" title="Preisliste hat sich geändert – unter Freigabe bestätigen">
-                      neu {formatMoney(row.calc.sellPrice, settings, { showCode: false })}
-                    </span>
-                  ) : (
-                    <span className="cell-sub">{formatMoney(row.totalSell, settings)}</span>
-                  )}
+                  <span className="cell-sub">{formatMoney(row.totalSell, settings)}</span>
                   <button
                     type="button"
                     className="btn btn--sm"

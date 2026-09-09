@@ -35,11 +35,9 @@ export interface PricedItem {
   entry?: PriceEntry;
   calc: PriceCalculation;
   /**
-   * Preis, zu dem diese Karte tatsächlich über den Tresen geht, pro Stück in EUR:
-   * der Preis auf dem Kärtchen, solange er nicht neu freigegeben wurde. Genau
-   * diesen Wert schlägt auch der Verkaufsdialog vor – Liste, Auswertung und
-   * Verkauf sollen dieselbe Zahl nennen. `calc.sellPrice` ist demgegenüber der
-   * frisch berechnete Vorschlag und gehört auf die Freigabe-Seite.
+   * Preis, zu dem diese Karte über den Tresen geht, pro Stück in EUR:
+   * Basis + Aufschlag, so wie die Preisregel ihn gerade rechnet. Liste,
+   * Verkaufsdialog, Auswertung und Ausgaben nennen alle diesen Wert.
    */
   sellPrice: number | null;
   /** Verkaufswert der gesamten Menge in EUR */
@@ -246,10 +244,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const entry = findPriceEntry(item, ctx);
       const calc = calculatePrice(item, entry, ctx);
       const approvedPrice = item.approvedPrice ?? null;
-      // Verkauft wird zum Kärtchenpreis. Also rechnen Bestandswert und Marge
-      // auch damit – sonst weist die Auswertung Geld aus, das an der Kasse
-      // nie eingenommen wird.
-      const sellPrice = approvedPrice ?? calc.sellPrice;
+      // Der Verkaufspreis ist Basis + Aufschlag, immer der aktuelle. Der zuletzt
+      // ausgezeichnete Preis springt nur ein, wenn die Preisliste gerade gar
+      // keinen Wert führt – sonst stünde eine Karte ohne Preis da, bloss weil
+      // Cardmarket sie vorübergehend nicht listet.
+      const sellPrice = calc.sellPrice ?? approvedPrice;
       const totalSell = sellPrice === null ? null : sellPrice * item.quantity;
       const totalCost = item.purchasePrice === undefined ? null : item.purchasePrice * item.quantity;
       const margin =

@@ -124,18 +124,6 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
     return calculatePrice(draft, matchedEntry, ctx);
   }, [draft, matchedEntry, settings, overrides]);
 
-  /**
-   * Eine schon ausgezeichnete Karte geht weiterhin zum Preis auf dem Kärtchen
-   * über den Tresen – Speichern hier ändert daran nichts (siehe unten, der
-   * bestehende approvedPrice bleibt stehen). Die Vorschau zeigt deshalb beides
-   * und nennt zuerst, was tatsächlich verlangt wird. Verglichen wird in der
-   * Anzeigewährung: was gleich aussieht, ist gleich.
-   */
-  const kaertchenPreis = draft.approvedPrice ?? null;
-  const preisWeichtAb =
-    kaertchenPreis !== null &&
-    preview.sellPrice !== null &&
-    formatMoney(kaertchenPreis, settings) !== formatMoney(preview.sellPrice, settings);
 
   /** Legt den getippten Ort an und wählt ihn gleich aus. */
   async function ortAnlegen() {
@@ -615,40 +603,14 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
                 </dd>
               </>
             ) : null}
-            {preisWeichtAb ? (
-              <>
-                <dt>Neu berechnet</dt>
-                <dd>{formatMoney(preview.sellPrice, settings)}</dd>
-                <dt>Auf dem Kärtchen – gilt beim Verkauf</dt>
-                <dd>
-                  <strong>{formatMoney(kaertchenPreis, settings)}</strong>
-                </dd>
-                <dt>Gesamt ({draft.quantity} Stk.)</dt>
-                <dd>{formatMoney((kaertchenPreis ?? 0) * draft.quantity, settings)}</dd>
-              </>
-            ) : (
-              <>
-                <dt>Verkaufspreis pro Stück</dt>
-                <dd>
-                  <strong>{formatMoney(preview.sellPrice, settings)}</strong>
-                </dd>
-                <dt>Gesamt ({draft.quantity} Stk.)</dt>
-                <dd>{formatMoney(preview.sellPrice * draft.quantity, settings)}</dd>
-              </>
-            )}
+            <dt>Verkaufspreis pro Stück</dt>
+            <dd>
+              <strong>{formatMoney(preview.sellPrice, settings)}</strong>
+            </dd>
+            <dt>Gesamt ({draft.quantity} Stk.)</dt>
+            <dd>{formatMoney(preview.sellPrice * draft.quantity, settings)}</dd>
           </dl>
         )}
-
-        {preisWeichtAb ? (
-          <p className="small dim" style={{ marginTop: 10, marginBottom: 0 }}>
-            Die Preisliste hat sich seit dem Auszeichnen geändert. Verkauft wird zum Kärtchenpreis; den neuen
-            Preis übernehmt ihr unter{' '}
-            <Link to="/freigabe" onClick={onClose}>
-              Freigabe
-            </Link>
-            .
-          </p>
-        ) : null}
 
         {settings.applyConditionFactors && draft.condition !== 'NM' && preview.sellPrice !== null ? (
           <p className="small dim" style={{ marginTop: 10, marginBottom: 0 }}>
