@@ -38,7 +38,12 @@ await Promise.all(
     cardsPerSet.set(set.id, list.length);
     for (const card of list) {
       const key = normalizeName(card.name);
-      const entry = { setId: set.id, number: card.number, rarity: card.rarity };
+      const entry = {
+        setId: set.id,
+        number: card.number,
+        rarity: card.rarity,
+        attacks: (card.attacks ?? []).map((attack) => normalizeName(attack.name)),
+      };
       if (byName.has(key)) byName.get(key).push(entry);
       else byName.set(key, [entry]);
     }
@@ -47,7 +52,7 @@ await Promise.all(
 console.log(`Bekannte Sets: ${sets.length}, Karten: ${[...cardsPerSet.values()].reduce((a, b) => a + b, 0)}`);
 
 const normalized = new Map([...groups].map(([id, names]) => [id, names.map(normalizeName)]));
-const matched = matchExpansions(normalized, byName);
+const matched = matchExpansions(normalized, byName, cardsPerSet);
 console.log(`Zugeordnet: ${matched.size} von ${groups.size}`);
 
 // Die grössten Editionen zuerst: dort liegt die Masse der Karten
@@ -57,11 +62,13 @@ for (const [id, names] of largest) {
   const hit = matched.get(id);
   const votes = new Map();
   for (const key of names.map(normalizeName)) {
-    for (const entry of byName.get(key) ?? []) votes.set(entry.setId, (votes.get(entry.setId) ?? 0) + 1);
+    for (const setId of new Set((byName.get(key) ?? []).map((e) => e.setId))) {
+      votes.set(setId, (votes.get(setId) ?? 0) + 1);
+    }
   }
   const best = [...votes].sort((a, b) => b[1] - a[1])[0];
   const treffer = hit
-    ? `→ ${hit.setId} (${(hit.share * 100).toFixed(0)} %)`
+    ? `→ ${hit.setId} (Edition ${(hit.share * 100).toFixed(0)} %, Set ${(hit.coverage * 100).toFixed(0)} %)`
     : `KEIN TREFFER (bester: ${best ? `${best[0]} ${best[1]}/${names.length}` : 'keiner'})`;
   console.log(`${id}: ${names.length} Produkte ${treffer}`);
   console.log(`   Namen: ${names.slice(0, 6).join(' | ')}`);
@@ -92,8 +99,8 @@ console.log(`\nIn zugeordneten Editionen: ${inMatched} Produkte, davon ${resolve
 console.log(`Gesamt: ${resolved} von ${products.length} Cardmarket-Produkten bekämen Set und Nummer`);
 
 // Knappe Treffer sind die gefährlichen: ein falsches Set wäre schlimmer als keines
-const knapp = [...matched].filter(([, m]) => m.share < 0.65).length;
-console.log(`Zuordnungen unter 65 % Anteil (heikel): ${knapp} von ${matched.size}`);
+const knapp = [...matched].filter(([, m]) => m.rating < 0.7).length;
+console.log(`Zuordnungen mit schwacher Deckung (unter 0.7): ${knapp} von ${matched.size}`);
 
 console.log('\nStichprobe:\n  ' + proben.join('\n  '));
 console.log('\nNicht gefunden, Beispiele:\n  ' + misses.join('\n  '));
