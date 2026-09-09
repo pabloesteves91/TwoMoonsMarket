@@ -149,7 +149,7 @@ export default function SellForm({ row, onClose }: { row: PricedItem; onClose: (
       </div>
 
       <dl className="kv">
-        <dt>Vorschlag (Kärtchenpreis)</dt>
+        <dt>Vorschlag (Basis + Aufschlag)</dt>
         <dd>{formatMoney(suggested, settings)}</dd>
         <dt>Erlös</dt>
         <dd>
