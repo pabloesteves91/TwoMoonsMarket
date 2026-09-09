@@ -86,6 +86,20 @@ await pruefe('Einstellungen lesen', assertSucceeds(getDoc(doc(tresen, `workspace
 await pruefe('Karte an einen anderen Lagerort umlagern', assertSucceeds(
   updateDoc(doc(tresen, `workspaces/${WS}/items/karte1`), { location: 'Event', updatedAt: Date.now() })));
 await pruefe('Lagerorte lesen', assertSucceeds(getDoc(doc(tresen, `workspaces/${WS}/locations/vitrine`))));
+// Die App schreibt beim Umlagern nicht einzelne Felder, sondern das ganze
+// Dokument (setDoc in firebaseRepository.saveItem). Die Regel sieht nur die
+// geänderten Felder – aber genau das muss geprüft sein, sonst geht es im Test
+// gut und am Tresen nicht.
+await pruefe('Umlagern so, wie die App schreibt (ganzes Dokument)', assertSucceeds(
+  setDoc(doc(tresen, `workspaces/${WS}/items/karte1`), {
+    name: 'Heliod, Sun-Crowned', quantity: 3, purchasePrice: 12, location: 'Event', updatedAt: Date.now(),
+  })));
+// Dabei darf nichts anderes mitgeschrieben werden - ein weggelassenes Feld
+// zählt als Änderung und muss abgewiesen werden.
+await pruefe('ganzes Dokument, aber Einkaufspreis fehlt', assertFails(
+  setDoc(doc(tresen, `workspaces/${WS}/items/karte1`), {
+    name: 'Heliod, Sun-Crowned', quantity: 3, location: 'Vitrine', updatedAt: Date.now(),
+  })));
 
 console.log('\n=== Verkaufskonto: das soll nicht gehen ===');
 await pruefe('Verkauf auf fremden Namen buchen', assertFails(
