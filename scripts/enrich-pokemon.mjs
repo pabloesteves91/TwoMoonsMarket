@@ -445,6 +445,16 @@ export function choosePrinting(printings, product) {
  * sind – gleicher Name, gleiche Attacken. Sie sind verschiedene Drucke
  * derselben Karte; welcher gemeint ist, entscheidet erst die Reihenfolge.
  *
+ * Sortiert wird nach **Preis**, aufsteigend. Der Laden hat es bestätigt: die
+ * niedrigste Sammlernummer ist die gewöhnliche Karte und damit die günstigste;
+ * die alternativen Illustrationen tragen höhere Nummern und kosten mehr. Der
+ * Preis ist damit das inhaltlich richtige Ordnungsmerkmal.
+ *
+ * Fehlt ein Preis – neu erschienen, nie gehandelt –, entscheidet die
+ * Produktnummer von Cardmarket. Sie steigt in der Reihenfolge, in der die
+ * Produkte angelegt wurden, und das ist dieselbe Reihenfolge, die auch
+ * (V1), (V2) abbildet.
+ *
  * Gruppiert wird nach Name UND Attacken: "Pikachu ex [Thunderbolt]" und
  * "Pikachu ex [Topaz Bolt]" sind zwei verschiedene Karten und dürfen sich
  * keine Reihenfolge teilen, sonst verschieben sie einander die Nummern.
@@ -462,14 +472,45 @@ export function assignPositions(produkte) {
   }
   for (const liste of nachGruppe.values()) {
     if (liste.length < 2) continue;
-    // Die Produktnummern von Cardmarket steigen in der Reihenfolge, in der die
-    // Produkte angelegt wurden.
-    liste.sort((a, b) => a.id - b.id);
+    // Alle ohne Preis: dann bleibt nur die Produktnummer. Sonst führt der Preis,
+    // und nur bei gleichem Preis entscheidet die Produktnummer.
+    const alleOhnePreis = liste.every((product) => product.price === undefined);
+    liste.sort((a, b) =>
+      alleOhnePreis || a.price === b.price
+        ? a.id - b.id
+        : (a.price ?? Infinity) - (b.price ?? Infinity),
+    );
     liste.forEach((product, index) => {
       product.position = index + 1;
     });
   }
   return produkte;
+}
+
+/**
+ * Preis je Produkt aus der Cardmarket-Preisliste, nur zum Sortieren.
+ *
+ * Fehlt die Datei, wird ohne Preise gearbeitet – dann greift die Reihenfolge
+ * nach Produktnummer.
+ */
+async function loadPrices(dir, index) {
+  const datei = index.files?.find((f) => f.cardmarketGameId === 6 && f.kind === 'priceGuide');
+  if (!datei || !datei.file.endsWith('.json')) return new Map();
+  try {
+    const raw = JSON.parse(await readFile(`${dir}/${datei.file}`, 'utf8'));
+    const zeilen = raw.priceGuides ?? raw.priceGuide ?? raw.prices ?? [];
+    const preise = new Map();
+    for (const zeile of zeilen) {
+      const id = Number(zeile.idProduct);
+      const preis = zeile.trend ?? zeile.avg ?? zeile.low ?? zeile['trend-price'] ?? zeile['avg-sell-price'];
+      if (id && typeof preis === 'number') preise.set(id, preis);
+    }
+    console.log(`· Preise zum Ordnen der Drucke: ${preise.size.toLocaleString('de-CH')} Produkte`);
+    return preise;
+  } catch (err) {
+    console.warn(`· Preisliste nicht lesbar (${err.message}) – Drucke werden nach Produktnummer geordnet.`);
+    return new Map();
+  }
 }
 
 async function main() {
@@ -488,6 +529,8 @@ async function main() {
   }
 
   const catalog = JSON.parse(await readFile(`${dir}/${catalogFile.file}`, 'utf8'));
+  // Preise ordnen die Drucke einer Karte – siehe assignPositions.
+  const preise = await loadPrices(dir, index);
   const products = catalog.products ?? catalog.product ?? [];
 
   // Karten nach Cardmarket-Edition gruppieren
@@ -508,7 +551,13 @@ async function main() {
     groups.get(expansionId).push(key);
     productsByExpansion
       .get(expansionId)
-      .push({ id, key, variant: variantOf(product.name), attacks: attacksOf(product.name) });
+      .push({
+        id,
+        key,
+        variant: variantOf(product.name),
+        attacks: attacksOf(product.name),
+        price: preise.get(id),
+      });
   }
   for (const produkte of productsByExpansion.values()) assignPositions(produkte);
 

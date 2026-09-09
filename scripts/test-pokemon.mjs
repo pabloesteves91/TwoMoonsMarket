@@ -134,9 +134,31 @@ const produkte = [
 ];
 assignPositions(produkte);
 const pos = (id) => produkte.find((p) => p.id === id).position;
-pruefe('nach Produktnummer sortiert', [pos(5046), pos(5264), pos(5295)], [1, 2, 3]);
+pruefe('ohne Preise nach Produktnummer', [pos(5046), pos(5264), pos(5295)], [1, 2, 3]);
 pruefe('Attacken trennen die Gruppen', [pos(5056), pos(5276)], [1, 2]);
 pruefe('Einzelnes Produkt ohne Position', pos(5275), undefined);
+
+// Der Laden hat es bestaetigt: die guenstigste Variante traegt die niedrigste
+// Nummer. Der Preis ordnet die Drucke deshalb, nicht die Produktnummer - auch
+// wenn beide sich widersprechen.
+const mitPreis = [
+  { id: 5046, key: 'froslass', attacks: ['a'], price: 48.17 },
+  { id: 5264, key: 'froslass', attacks: ['a'], price: 7.03 },
+  { id: 5274, key: 'froslass', attacks: ['a'], price: 18.81 },
+];
+assignPositions(mitPreis);
+const posP = (id) => mitPreis.find((p) => p.id === id).position;
+pruefe('Preis ordnet: guenstigste zuerst', [posP(5264), posP(5274), posP(5046)], [1, 2, 3]);
+
+// Fehlt ein einzelner Preis, faellt dieses Produkt ans Ende - eine nie
+// gehandelte Karte ist keine guenstige.
+const teilweise = [
+  { id: 1, key: 'x', attacks: [], price: 5 },
+  { id: 2, key: 'x', attacks: [] },
+  { id: 3, key: 'x', attacks: [], price: 1 },
+];
+assignPositions(teilweise);
+pruefe('ohne Preis ans Ende', teilweise.map((p) => p.id + ':' + p.position).join(' '), '1:2 2:3 3:1');
 
 // ------------------------------- Jede Karte nur einmal je Suchschluessel
 // Die Namen sind zwischen den Sprachen oft gleich. Landete eine Karte deshalb
