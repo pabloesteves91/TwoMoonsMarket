@@ -251,7 +251,10 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
         <input
           id="name"
           ref={nameRef}
-          autoFocus
+          // Nur beim Erfassen springt der Fokus ins Feld. Beim Bearbeiten einer
+          // vorhandenen Karte klappte sonst sofort die Vorschlagsliste auf,
+          // obwohl die Karte längst ausgewählt ist.
+          autoFocus={!item}
           value={draft.name}
           autoComplete="off"
           placeholder="z.B. Lightning Bolt"
