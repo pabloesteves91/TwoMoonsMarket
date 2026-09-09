@@ -472,6 +472,25 @@ async function main() {
       `(${direkt.size} über die Cardmarket-Nummer, ${geraten.size} über Namen)`,
   );
 
+  // Was fehlt, und wie Cardmarket es benennt. Ohne diese Zeilen bleibt der
+  // Rest Raterei: die Editionsliste von Cardmarket ist gesperrt (403), also
+  // sind die Produktnamen der einzige Hinweis darauf, um welches Set es geht
+  // und in welcher Sprache es geführt wird.
+  const offeneListe = [...offen.entries()]
+    .map(([expansionId, names]) => ({ expansionId, anzahl: names.length }))
+    .sort((a, b) => b.anzahl - a.anzahl)
+    .slice(0, 12);
+  if (offeneListe.length > 0) {
+    console.log('· Grösste nicht zugeordnete Editionen (Nummer, Produkte, Beispielnamen):');
+    for (const { expansionId, anzahl } of offeneListe) {
+      const beispiele = (productsByExpansion.get(expansionId) ?? [])
+        .slice(0, 3)
+        .map((product) => product.key)
+        .join(' | ');
+      console.log(`    ${expansionId}  ${String(anzahl).padStart(5)}  ${beispiele}`);
+    }
+  }
+
   const meta = {};
   let mitNummer = 0;
   let nurSet = 0;

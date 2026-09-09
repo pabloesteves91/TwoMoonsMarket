@@ -307,8 +307,10 @@ export default function ItemForm({ item, onClose }: ItemFormProps) {
           </p>
         ) : draft.name.trim().length >= 2 && !searching && suggestions.length === 0 ? (
           <p className="small dim" style={{ marginTop: 6 }}>
-            Keine Karte mit diesem Namen in der Preisliste von {game?.short ?? game?.name}. Die Suche geht über
-            Wortanfänge – „aang" findet „Aang, Swift Nomad". Stimmt das Spiel oben?
+            Nichts gefunden in der Preisliste von {game?.short ?? game?.name}. Gesucht wird über Wortanfänge des
+            Namens, über das Set-Kürzel und über die Kartennummer – „aang" findet „Aang, Swift Nomad", „M2A 031"
+            die Karte 31 aus M2A. Kommt nichts, kennt die Preisliste zu dieser Karte noch kein Set: dann Namen
+            eingeben und Set und Nummer unten von Hand ergänzen. Stimmt das Spiel oben?
           </p>
         ) : hasPriceList && draft.name.trim().length < 2 ? (
           <p className="small dim" style={{ marginTop: 6 }}>
