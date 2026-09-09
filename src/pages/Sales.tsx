@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import RevenueChart from '../components/RevenueChart';
 import { useStore } from '../store';
+import { isStoreOnly, useAuth } from '../firebase/authContext';
 import { convert, downloadFile, formatDate, formatMoney, formatNumber, formatPercent } from '../lib/format';
 import { toCsv } from '../lib/csv';
 import { SALE_CHANNEL_LABELS, type Sale } from '../types';
@@ -14,8 +15,22 @@ const RANGE_LABELS: Record<Range, string> = {
   0: 'Alles',
 };
 
+/** Beginn des heutigen Tages – Grenze für das, was das Verkaufskonto stornieren darf. */
+function heuteAb(): number {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  return start.getTime();
+}
+
 export default function Sales() {
   const { sales, settings, games, gameById, cancelSale } = useStore();
+  const { user, member } = useAuth();
+  /**
+   * Verkaufskonto: sieht die eigenen Buchungen des Tages und kann sie
+   * zurücknehmen – ein Vertipper am Tresen soll nicht auf die Leitung warten.
+   * Ältere und fremde Verkäufe bleiben unangetastet.
+   */
+  const storeOnly = isStoreOnly(member);
   const [range, setRange] = useState<Range>(30);
   const [gameFilter, setGameFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -23,7 +38,10 @@ export default function Sales() {
   const filtered = useMemo(() => {
     const from = range === 0 ? 0 : Date.now() - range * 24 * 3600 * 1000;
     const query = search.trim().toLowerCase();
+    const eigeneGrenze = heuteAb();
     return sales.filter((sale) => {
+      // Das Verkaufskonto sieht nur die eigenen Buchungen von heute
+      if (storeOnly && (sale.soldBy !== user?.uid || sale.soldAt < eigeneGrenze)) return false;
       if (sale.soldAt < from) return false;
       if (gameFilter && sale.gameId !== gameFilter) return false;
       if (!query) return true;
@@ -31,7 +49,7 @@ export default function Sales() {
         String(value).toLowerCase().includes(query),
       );
     });
-  }, [sales, range, gameFilter, search]);
+  }, [sales, range, gameFilter, search, storeOnly, user?.uid]);
 
   const stats = useMemo(() => {
     let revenue = 0;
@@ -132,13 +150,19 @@ export default function Sales() {
       <div className="page-head">
         <div>
           <h1>Verkäufe</h1>
-          <p>Was verkauft wurde, zu welchem Preis und mit welchem Gewinn.</p>
+          <p>
+            {storeOnly
+              ? 'Deine Buchungen von heute. Ein Verkauf aus Versehen lässt sich hier zurücknehmen.'
+              : 'Was verkauft wurde, zu welchem Preis und mit welchem Gewinn.'}
+          </p>
         </div>
-        <div className="page-head__actions">
-          <button type="button" className="btn" onClick={exportCsv} disabled={filtered.length === 0}>
-            CSV exportieren
-          </button>
-        </div>
+        {storeOnly ? null : (
+          <div className="page-head__actions">
+            <button type="button" className="btn" onClick={exportCsv} disabled={filtered.length === 0}>
+              CSV exportieren
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Eine Filterzeile für alles darunter – Kennzahlen, Diagramm und Liste */}
@@ -256,12 +280,19 @@ export default function Sales() {
         </div>
         {filtered.length === 0 ? (
           <p className="muted small" style={{ margin: 0 }}>
-            Keine Verkäufe im gewählten Zeitraum. Verkäufe werden im Bestand über „Verkauft" gebucht.
+            {storeOnly
+              ? 'Heute noch nichts gebucht. Verkäufe werden im Bestand über „Verkauft" erfasst.'
+              : 'Keine Verkäufe im gewählten Zeitraum. Verkäufe werden im Bestand über „Verkauft" gebucht.'}
           </p>
         ) : (
           <ul className="list-reset divide">
             {filtered.map((sale) => (
-              <SaleRow key={sale.id} sale={sale} onCancel={() => void cancelSale(sale.id)} />
+              <SaleRow
+                key={sale.id}
+                sale={sale}
+                storeOnly={storeOnly}
+                onCancel={() => void cancelSale(sale.id)}
+              />
             ))}
           </ul>
         )}
@@ -270,7 +301,15 @@ export default function Sales() {
   );
 }
 
-function SaleRow({ sale, onCancel }: { sale: Sale; onCancel: () => void }) {
+function SaleRow({
+  sale,
+  storeOnly,
+  onCancel,
+}: {
+  sale: Sale;
+  storeOnly: boolean;
+  onCancel: () => void;
+}) {
   const { settings, gameById } = useStore();
   const total = sale.unitPrice * sale.quantity;
   const profit =
@@ -293,7 +332,7 @@ function SaleRow({ sale, onCancel }: { sale: Sale; onCancel: () => void }) {
         <span className="num">
           <strong>{formatMoney(total, settings, { showCode: false })}</strong>
           <br />
-          {profit === null ? (
+          {storeOnly ? null : profit === null ? (
             <span className="cell-sub">kein Einkauf</span>
           ) : (
             <span className={`cell-sub ${profit >= 0 ? 'pos' : 'neg'}`}>
@@ -305,13 +344,17 @@ function SaleRow({ sale, onCancel }: { sale: Sale; onCancel: () => void }) {
         <button
           type="button"
           className="btn btn--ghost btn--sm"
-          title="Verkauf stornieren – die Menge wandert zurück in den Bestand"
+          title="Verkauf zurücknehmen – die Menge wandert zurück in den Bestand"
           onClick={() => {
-            if (confirm(`Verkauf von "${sale.name}" stornieren? Die Karten gehen zurück in den Bestand.`))
+            if (
+              confirm(
+                `Verkauf von "${sale.name}" zurücknehmen? ${sale.quantity} Karte(n) gehen zurück in den Bestand.`,
+              )
+            )
               onCancel();
           }}
         >
-          ✕
+          Rückgängig
         </button>
       </span>
     </li>

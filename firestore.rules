@@ -4,19 +4,59 @@ rules_version = '2';
 // workspaces/{ws}/members/{uid} eingetragen ist. Ein Konto allein genügt nicht –
 // bei aktivierter E-Mail-Anmeldung könnte sich sonst jede beliebige Person
 // registrieren und mitlesen.
+//
+// Rollen:
+//   admin   darf alles, auch die Mitgliederliste ändern
+//   member  darf alles ausser der Mitgliederliste (Standard, wenn nichts steht)
+//   store   darf nur verkaufen – für Aushilfen am Tresen. Diese Rolle ist hier
+//           verbindlich festgelegt, nicht in der Oberfläche: was die App
+//           ausblendet, ist Bequemlichkeit, was hier steht, ist die Sperre.
 service cloud.firestore {
   match /databases/{database}/documents {
 
     match /workspaces/{ws} {
+
+      function memberDoc() {
+        return get(/databases/$(database)/documents/workspaces/$(ws)/members/$(request.auth.uid)).data;
+      }
 
       function isMember() {
         return request.auth != null
           && exists(/databases/$(database)/documents/workspaces/$(ws)/members/$(request.auth.uid));
       }
 
+      // Fehlt die Rolle, gilt der bisherige Zustand: volle Rechte ausser Mitglieder.
+      // Gross- und Kleinschreibung ist egal: "Store" und "store" meinen dasselbe.
+      function role() {
+        return isMember() && memberDoc().keys().hasAny(['role'])
+          ? memberDoc().role.lower()
+          : 'member';
+      }
+
       function isAdmin() {
-        return isMember()
-          && get(/databases/$(database)/documents/workspaces/$(ws)/members/$(request.auth.uid)).data.role == 'admin';
+        return role() == 'admin';
+      }
+
+      // Verkaufskonto
+      function isStore() {
+        return role() == 'store';
+      }
+
+      // Leitung: alles ausser der Mitgliederliste.
+      //
+      // Aufgezählt statt "alles ausser store": ein vertippter Rollenname soll
+      // nicht versehentlich volle Rechte geben. Wer etwas Unbekanntes einträgt,
+      // darf lesen und sonst nichts – das fällt auf und ist harmlos, während
+      // der umgekehrte Fehler unbemerkt Türen öffnet.
+      function isManager() {
+        return isMember() && (role() == 'admin' || role() == 'member');
+      }
+
+      // Ein Verkauf lässt sich einen Tag lang zurücknehmen. Kalendertage sind in
+      // den Rules nicht zuverlässig zu bilden (Zeitzone), deshalb 24 Stunden.
+      function frischerEigenerVerkauf() {
+        return resource.data.soldBy == request.auth.uid
+          && request.time.toMillis() - resource.data.soldAt < 24 * 60 * 60 * 1000;
       }
 
       // Das Arbeitsbereichs-Dokument selbst wird nicht benötigt.
@@ -29,9 +69,33 @@ service cloud.firestore {
         allow write: if isAdmin();
       }
 
-      // Bestand, Regeln, Spiele, Fotos, Einstellungen
+      // Verkäufe: das Verkaufskonto bucht auf den eigenen Namen und kann eine
+      // Buchung innerhalb eines Tages zurücknehmen. Ändern ist niemandem erlaubt
+      // ausser der Leitung – ein gebuchter Verkauf wird storniert, nicht frisiert.
+      match /sales/{saleId} {
+        allow read: if isMember();
+        allow create: if isManager()
+          || (isStore() && request.resource.data.soldBy == request.auth.uid);
+        allow update: if isManager();
+        allow delete: if isManager() || (isStore() && frischerEigenerVerkauf());
+      }
+
+      // Bestand: das Verkaufskonto darf ausschliesslich die Menge bewegen.
+      // Anlegen und Löschen bleiben der Leitung vorbehalten; ausverkaufte
+      // Einträge bleiben mit Menge 0 stehen, damit hier nichts gelöscht werden muss.
+      match /items/{itemId} {
+        allow read: if isMember();
+        allow create, delete: if isManager();
+        allow update: if isManager()
+          || (isStore()
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['quantity', 'updatedAt'])
+              && request.resource.data.quantity >= 0);
+      }
+
+      // Preise, Regeln, Spiele, Fotos, Einstellungen: lesen alle, ändern nur die Leitung.
       match /{collection}/{docId} {
-        allow read, write: if isMember() && collection != 'members';
+        allow read: if isMember() && collection != 'members';
+        allow write: if isManager() && collection != 'members';
       }
     }
 

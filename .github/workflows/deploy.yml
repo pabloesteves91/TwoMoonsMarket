@@ -49,6 +49,20 @@ jobs:
       - name: Typen prüfen und bauen
         run: npm run build
 
+      # Der Firestore-Emulator läuft auf Java und verlangt mindestens 21; das
+      # Standard-JDK des Runners ist älter.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Die Rolle "store" ist eine Zugriffsbeschränkung. Was die Oberfläche
+      # ausblendet, ist Bequemlichkeit – verbindlich sind die Security Rules.
+      # Deshalb laufen sie hier gegen den Emulator, bei jedem Lauf.
+      - name: Security Rules prüfen
+        timeout-minutes: 8
+        run: npm run test:rules
+
       # Katalog (Kartennamen) und Preisliste werden hier zusammengeführt und auf
       # die Felder eingedampft, die die App auswertet – aus über 100 MB Rohdaten
       # werden so wenige MB, die auch über Mobilfunk zumutbar sind.

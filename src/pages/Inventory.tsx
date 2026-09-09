@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ItemForm from '../components/ItemForm';
 import SellForm from '../components/SellForm';
+import { isStoreOnly, useAuth } from '../firebase/authContext';
 import { useStore, type PricedItem } from '../store';
 import { formatMoney, formatNumber, downloadFile } from '../lib/format';
 import { buildInventoryCsv, EXPORT_LABELS, type ExportFormat } from '../lib/exporters';
@@ -12,6 +13,9 @@ type SortKey = 'name' | 'set' | 'quantity' | 'price' | 'total' | 'margin' | 'upd
 
 export default function Inventory() {
   const { pricedItems, settings, games, gameById, saveItem, refresh } = useStore();
+  const { member } = useAuth();
+  /** Verkaufskonto: keine Einkaufszahlen, kein Anlegen, kein Bearbeiten. */
+  const storeOnly = isStoreOnly(member);
   const [params, setParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [gameFilter, setGameFilter] = useState('');
@@ -42,6 +46,9 @@ export default function Inventory() {
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
     const filtered = pricedItems.filter(({ item, calc }) => {
+      // Ausverkaufte Einträge bleiben in der Datenbank – als Gedächtnis für eine
+      // Rücknahme –, gehören aber nicht in die Bestandsliste.
+      if (item.quantity <= 0) return false;
       if (gameFilter && item.gameId !== gameFilter) return false;
       if (conditionFilter && item.condition !== conditionFilter) return false;
       if (foilFilter === 'foil' && !item.foil) return false;
@@ -117,10 +124,12 @@ export default function Inventory() {
         <div>
           <h1>Bestand</h1>
           <p>
-            {formatNumber(totals.units)} Karten · Verkaufswert {formatMoney(totals.sell, settings)}
-            {totals.cost > 0 ? ` · Einkauf ${formatMoney(totals.cost, settings)}` : ''}
+            {formatNumber(totals.units)} Karten
+            {storeOnly ? '' : ` · Verkaufswert ${formatMoney(totals.sell, settings)}`}
+            {storeOnly || totals.cost === 0 ? '' : ` · Einkauf ${formatMoney(totals.cost, settings)}`}
           </p>
         </div>
+        {storeOnly ? null : (
         <div className="page-head__actions">
           <select
             aria-label="CSV-Export"
@@ -141,6 +150,7 @@ export default function Inventory() {
             + Karte
           </button>
         </div>
+        )}
       </div>
 
       <div className="toolbar">
@@ -189,13 +199,17 @@ export default function Inventory() {
         <div className="empty">
           <div className="empty__icon">▦</div>
           <p>
-            {pricedItems.length === 0
-              ? 'Noch keine Karten erfasst. Lege den ersten Eintrag an – oder importiere zuerst die Preisliste.'
-              : 'Keine Treffer für die aktuellen Filter.'}
+            {storeOnly
+              ? 'Keine Karten im Bestand, die zu den Filtern passen.'
+              : pricedItems.length === 0
+                ? 'Noch keine Karten erfasst. Lege den ersten Eintrag an – oder importiere zuerst die Preisliste.'
+                : 'Keine Treffer für die aktuellen Filter.'}
           </p>
-          <button type="button" className="btn btn--primary" onClick={() => setCreating(true)}>
-            + Karte hinzufügen
-          </button>
+          {storeOnly ? null : (
+            <button type="button" className="btn btn--primary" onClick={() => setCreating(true)}>
+              + Karte hinzufügen
+            </button>
+          )}
         </div>
       ) : (
         <>
@@ -221,9 +235,11 @@ export default function Inventory() {
                   <th className="num is-sortable" onClick={() => toggleSort('total')}>
                     Gesamt
                   </th>
-                  <th className="num is-sortable" onClick={() => toggleSort('margin')}>
-                    Marge
-                  </th>
+                  {storeOnly ? null : (
+                    <th className="num is-sortable" onClick={() => toggleSort('margin')}>
+                      Marge
+                    </th>
+                  )}
                   <th />
                 </tr>
               </thead>
@@ -299,21 +315,25 @@ export default function Inventory() {
                       </td>
                       <td className="num">{formatMoney(row.calc.sellPrice, settings, { showCode: false })}</td>
                       <td className="num">{formatMoney(row.totalSell, settings, { showCode: false })}</td>
-                      <td className={`num ${row.margin === null ? '' : row.margin >= 0 ? 'pos' : 'neg'}`}>
-                        {row.margin === null ? '–' : formatMoney(row.margin, settings, { showCode: false })}
-                      </td>
+                      {storeOnly ? null : (
+                        <td className={`num ${row.margin === null ? '' : row.margin >= 0 ? 'pos' : 'neg'}`}>
+                          {row.margin === null ? '–' : formatMoney(row.margin, settings, { showCode: false })}
+                        </td>
+                      )}
                       <td className="num">
                         <div className="row" style={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
                           <button type="button" className="btn btn--sm" onClick={() => setSelling(row)}>
                             Verkauft
                           </button>
-                          <button
-                            type="button"
-                            className="btn btn--ghost btn--sm"
-                            onClick={() => setEditing(row.item)}
-                          >
-                            Bearbeiten
-                          </button>
+                          {storeOnly ? null : (
+                            <button
+                              type="button"
+                              className="btn btn--ghost btn--sm"
+                              onClick={() => setEditing(row.item)}
+                            >
+                              Bearbeiten
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -326,7 +346,11 @@ export default function Inventory() {
           {/* Mobile: Karten */}
           <div className="item-list mobile-only">
             {rows.map((row) => (
-              <div key={row.item.id} className="item-card" onClick={() => setEditing(row.item)}>
+              <div
+                key={row.item.id}
+                className="item-card"
+                onClick={() => (storeOnly ? setSelling(row) : setEditing(row.item))}
+              >
                 {row.item.photoId && photos[row.item.photoId] ? (
                   <img className="thumb" src={photos[row.item.photoId]} alt="" />
                 ) : (
