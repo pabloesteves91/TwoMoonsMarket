@@ -473,17 +473,33 @@ async function main() {
   );
 
   const meta = {};
+  let mitNummer = 0;
+  let nurSet = 0;
   for (const [expansionId, match] of matched) {
     const set = setsById.get(match.setId);
     // Der PTCGO-Code ist das Kürzel, das im Laden verwendet wird
     const code = (set?.ptcgoCode ?? set?.id ?? '').toUpperCase();
+    if (!code) continue;
     for (const product of productsByExpansion.get(expansionId) ?? []) {
       const printings = (byName.get(product.key) ?? [])
         .filter((entry) => entry.setId === match.setId)
         .sort((a, b) => numeric(a.number) - numeric(b.number));
-      if (printings.length === 0) continue;
+
+      // Das Set steht fest, sobald die Edition erkannt ist – es hängt nicht
+      // daran, ob sich diese eine Karte namentlich wiederfinden lässt. Genau
+      // daran scheiterte es bisher: japanische Ausgaben führt Cardmarket unter
+      // englischem Namen, die japanische Quelle kennt nur den japanischen. Die
+      // Edition war damit sicher bekannt, das Produkt bekam trotzdem nichts.
+      // Ein Kürzel ohne Nummer ist im Laden immer noch weit besser als
+      // "Cardmarket #3125".
+      if (printings.length === 0) {
+        meta[product.id] = { set: code, setName: set?.name };
+        nurSet++;
+        continue;
+      }
       const card = choosePrinting(printings, product);
       meta[product.id] = { set: code, setName: set?.name, number: card.number, rarity: card.rarity };
+      mitNummer++;
     }
   }
 
@@ -495,7 +511,10 @@ async function main() {
 
   const file = 'product-meta-pokemon.json';
   await writeFile(`${dir}/${file}`, JSON.stringify(meta), 'utf8');
-  console.log(`✓ Pokémon: ${Object.keys(meta).length.toLocaleString('de-CH')} Karten mit Set und Nummer → ${file}`);
+  console.log(
+    `✓ Pokémon: ${Object.keys(meta).length.toLocaleString('de-CH')} Karten mit Set → ${file} ` +
+      `(${mitNummer.toLocaleString('de-CH')} auch mit Nummer, ${nurSet.toLocaleString('de-CH')} nur mit Kürzel)`,
+  );
 
   index.files.push({ kind: 'productMeta', game: 'pokemon', cardmarketGameId: 6, file });
   await writeFile(`${dir}/index.json`, JSON.stringify(index, null, 2), 'utf8');
